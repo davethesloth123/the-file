@@ -34,6 +34,29 @@
       { "at": 87, "label": "Detention order pending" }
     ]
   },
+  "confidence": {
+    "start": 100,
+    "max": 100,
+    "cleanDelay": 5.0,
+    "cleanRate": 1.2,
+    "tiers": [
+      { "at": 0, "intel": "none" },
+      { "at": 33, "intel": "partial" },
+      { "at": 66, "intel": "full" }
+    ]
+  },
+  "interaction": {
+    "promptRadius": 3.4,
+    "reachRadius": 2.6,
+    "talkHold": 0.45,
+    "radioHold": 6.5
+  },
+  "cones": {
+    "fullBase": 0.15,
+    "fullAlert": 0.28,
+    "partialBase": 0.08,
+    "partialAlert": 0.16
+  },
   "patrol": {
     "faceRate": 3.4,
     "turnRate": 3.2,

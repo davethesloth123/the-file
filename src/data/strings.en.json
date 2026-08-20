@@ -1,0 +1,24 @@
+{
+  "speaker.handler": "Handler",
+  "speaker.you": "You",
+
+  "handler.brief.ordinary_traffic": "A film cassette, taped under a bench in the park west of the avenue. Collect it and leave by the north gate. You are a man running an errand. Walk like one.",
+  "handler.now_carrying": "You are carrying now. Same streets, higher price. Walk.",
+
+  "confidence.note.full": "Full briefing supplied",
+  "confidence.note.partial": "Briefing partial",
+  "confidence.note.none": "Briefing withheld",
+
+  "objective.withheld": "not given",
+  "prompt.servicing": "Servicing",
+  "prompt.servicing.sub": "this is conspicuous — check who is looking",
+
+  "ending.burned.title": "Burned",
+  "ending.burned.body": "They never caught you doing anything. They only had to keep seeing you do it.",
+  "ending.clear.title": "Clear",
+  "ending.clear.body": "Out, carrying.",
+  "ending.clear.confidence_high": "He will send the next one within the week.",
+  "ending.clear.confidence_mid": "The next tasking will be thinner.",
+  "ending.clear.confidence_low": "He has started wondering who else you talk to.",
+  "ending.again": "Again"
+}

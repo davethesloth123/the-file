@@ -10,5 +10,6 @@
       "after": 9.0 }
   ],
   "multipliers": { "contraband": 1.9, "operational": 1.4 },
+  "flagMultipliers": { "carrying": "operational", "parcel": "contraband" },
   "observerScaling": "additive"
 }

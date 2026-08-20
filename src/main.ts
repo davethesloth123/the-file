@@ -23,7 +23,14 @@ import { createHud, type Hud } from './ui/hud';
 import { Patrol } from './actors/patrol';
 import { evaluateConduct, type ActiveConduct } from './systems/conduct';
 import { FileMeter } from './systems/file';
+import { ConfidenceMeter } from './systems/confidence';
+import { MissionRunner, type MissionDef } from './systems/mission';
+import { within, REACH_RADIUS } from './systems/interaction';
 import { CONE_RANGE, CONE_FOV } from './systems/observation';
+import { Radio } from './ui/radio';
+import { str } from './core/strings';
+import tuning from './data/tuning.json';
+import ordinaryTraffic from './data/missions/ordinary_traffic.json';
 
 const QUERY = new URLSearchParams(location.search);
 const GRADE_OFF = QUERY.get('grade') === 'off';
@@ -215,11 +222,37 @@ const trailing = new TrailingCamera(camera, renderer.domElement);
 interface PatrolUnit { patrol: Patrol; actor: Actor; fan: THREE.Mesh }
 const patrolUnits: PatrolUnit[] = [];
 const file = new FileMeter();
+const confidence = new ConfidenceMeter();
+let mission: MissionRunner | null = null;
+let radio: Radio | null = null;
 let hud: Hud | null = null;
 let stillSeconds = 0;
 let restrictedZones: { pos: [number, number]; r: number; label: string }[] = [];
 let lastConduct: ActiveConduct | null = null;
 let lastObservers = 0;
+
+// objective marker: paper ring and post, never red (red is the state's)
+function makeMarker(): THREE.Group {
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(1.1, 1.45, 28),
+    new THREE.MeshBasicMaterial({
+      color: 0xded2b8, transparent: true, opacity: 0.8, side: THREE.DoubleSide,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.05;
+  const post = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.055, 0.055, 2.2, 6),
+    new THREE.MeshBasicMaterial({ color: 0xded2b8, transparent: true, opacity: 0.35 }),
+  );
+  post.position.y = 1.1;
+  g.add(ring, post);
+  g.visible = false;
+  scene.add(g);
+  return g;
+}
+let objectiveMarker: THREE.Group | null = null;
 
 const FAN_MATERIAL = new THREE.MeshBasicMaterial({
   color: 0xc0201f,
@@ -251,6 +284,9 @@ async function startPlay(): Promise<void> {
   const level = buildLevel(scene);
   world = new CollisionWorld(level.walls, level.surfaces);
   hud = createHud();
+  radio = new Radio(document.body);
+  mission = new MissionRunner(ordinaryTraffic as unknown as MissionDef);
+  objectiveMarker = makeMarker();
   restrictedZones = level.restricted.map((r) => ({ pos: r.pos, r: r.r, label: r.label }));
   void spawnPatrols(level.patrols);
   // interior NPCs: shopkeepers, the clerk, the duty officer, the mechanic
@@ -280,6 +316,9 @@ async function startPlay(): Promise<void> {
   player.y = player.py = spawnY;
   (window as unknown as { __player?: PlayerState }).__player = player;
   (window as unknown as { __world?: CollisionWorld }).__world = world;
+  (window as unknown as { __mission?: MissionRunner }).__mission = mission;
+  (window as unknown as { __file?: FileMeter }).__file = file;
+  (window as unknown as { __confidence?: ConfidenceMeter }).__confidence = confidence;
   const asset = await loadArchetype('player');
   playerActor = new Actor(asset, { coat: asset.coats[0]! });
   scene.add(playerActor.group);
@@ -308,13 +347,19 @@ renderer.setAnimationLoop((nowMs: number) => {
   const alpha = clock.tick(nowMs, (dt) => {
     stepWalkers(dt);
     if (player && !freecam.enabled) {
+      // a hold in progress roots Andrei to the spot — you cannot service a
+      // drop while walking away from it
+      const locked = mission !== null && mission.activeConductId() !== null;
       player.step(dt, {
-        forward: held('w') - held('s'),
-        strafe: held('d') - held('a'),
-        hurrying: shiftHeld,
+        forward: locked ? 0 : held('w') - held('s'),
+        strafe: locked ? 0 : held('d') - held('a'),
+        hurrying: shiftHeld && !locked,
       }, trailing.yaw + Math.PI, world);
     }
     if (player) {
+      mission?.step(dt, player.x, player.z, keys.has('f'), {
+        file: file.value, confidence: confidence.value,
+      });
       // conduct: what is Andrei doing, and can anyone see it
       stillSeconds = player.moving ? 0 : stillSeconds + dt;
       let restrictedLabel: string | null = null;
@@ -324,8 +369,9 @@ renderer.setAnimationLoop((nowMs: number) => {
           break;
         }
       }
-      const conduct = evaluateConduct({
-        servicing: false,
+      const running = mission === null || mission.status === 'running';
+      const conduct = running ? evaluateConduct({
+        servicing: mission?.activeConductId() === 'service',
         talkingToFlagged: false,
         afterCurfew: false,
         restrictedLabel,
@@ -334,12 +380,13 @@ renderer.setAnimationLoop((nowMs: number) => {
         stillSeconds,
         atBench: false,
         offDistrict: false,
-      });
+      }) : null;
       let observers = 0;
       for (const u of patrolUnits) {
         if (u.patrol.step(dt, player.x, player.z, conduct !== null, world)) observers++;
       }
-      file.accrue(conduct, observers, 1, dt);
+      file.accrue(conduct, observers, mission?.multiplier() ?? 1, dt);
+      confidence.tick(conduct !== null && observers > 0, dt);
       lastConduct = conduct;
       lastObservers = observers;
     }
@@ -364,6 +411,7 @@ renderer.setAnimationLoop((nowMs: number) => {
     const dyaw = ((player.yaw - player.pyaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
     playerActor.group.position.set(ix, iy, iz);
     playerActor.group.rotation.y = player.pyaw + dyaw * alpha;
+    playerActor.locomotion.forced = mission?.activeConductId() ? 'crouch' : null;
     playerActor.update(player.moving ? player.speed : 0, frameDt);
 
     if (!freecam.enabled && !CAM_PIN && !LINEUP) {
@@ -387,11 +435,81 @@ renderer.setAnimationLoop((nowMs: number) => {
     u.actor.update(p.currentSpeed, frameDt);
     u.fan.position.set(ix, world.groundHeight(ix, iz, 0.3) + 0.08, iz);
     u.fan.rotation.z = -iyaw;
-    (u.fan.material as THREE.MeshBasicMaterial).opacity = 0.10 + p.alert * 0.25;
+    // intel gates cone VISIBILITY only: at no tier does the detection cone
+    // move, turn, or shrink (pillar III). Withheld, never wrong.
+    const intel = confidence.intel();
+    u.fan.visible = intel !== 'none';
+    (u.fan.material as THREE.MeshBasicMaterial).opacity = intel === 'full'
+      ? tuning.cones.fullBase + p.alert * tuning.cones.fullAlert
+      : tuning.cones.partialBase + p.alert * tuning.cones.partialAlert;
   }
   if (hud) {
     hud.setConduct(lastConduct?.label ?? null, lastObservers);
     hud.setFilePages(Math.round(file.value), file.tierLabel().toUpperCase());
+    hud.setConfidence(confidence.value, str(`confidence.note.${confidence.intel()}`));
+  }
+  if (hud && radio && mission && player) {
+    for (const key of mission.radioQueue.splice(0)) {
+      radio.show(str('speaker.handler'), str(key));
+    }
+    radio.tick(frameDt);
+
+    const meters = { file: file.value, confidence: confidence.value };
+    const objective = mission.active;
+    if (objective) {
+      const [ox, oz] = objective.pos ?? [0, 0];
+      const revealed = mission.revealed(objective, meters);
+      hud.setObjective(
+        objective.label,
+        revealed
+          ? `${Math.round(Math.hypot(player.x - ox, player.z - oz))} M`
+          : str('objective.withheld').toUpperCase(),
+      );
+      if (objectiveMarker) {
+        objectiveMarker.visible = revealed;
+        objectiveMarker.position.set(ox, world.groundHeight(ox, oz, 0.3), oz);
+        objectiveMarker.scale.setScalar(1 + Math.sin(nowMs / 400) * 0.08);
+      }
+      // the prompt: only hold objectives ask for a key
+      const holdType = objective.type === 'hold_at' || objective.type === 'talk_to';
+      const near = within(player.x, player.z, ox, oz, objective.radius ?? REACH_RADIUS);
+      if (holdType && near) {
+        const progress = mission.holdProgress();
+        hud.setPrompt(
+          progress > 0
+            ? `${str('prompt.servicing')}… ${Math.round(progress * 100)}%`
+            : objective.prompt ?? objective.label,
+          progress,
+          progress > 0 && objective.conduct ? str('prompt.servicing.sub') : null,
+        );
+      } else {
+        hud.setPrompt(null, 0, null);
+      }
+    } else {
+      hud.setObjective(null, null);
+      hud.setPrompt(null, 0, null);
+      if (objectiveMarker) objectiveMarker.visible = false;
+    }
+
+    if (mission.status === 'failed') {
+      hud.showEnd(
+        str('ending.burned.title'), str('ending.burned.body'),
+        '#b8322c', str('ending.again'),
+      );
+    } else if (mission.status === 'complete') {
+      const intel = confidence.intel();
+      const verdict = intel === 'full'
+        ? str('ending.clear.confidence_high')
+        : intel === 'partial'
+          ? str('ending.clear.confidence_mid')
+          : str('ending.clear.confidence_low');
+      hud.showEnd(
+        str('ending.clear.title'),
+        `${str('ending.clear.body')}<br><br>File closed at <b>${Math.round(file.value)}</b>` +
+        ` · confidence <b>${Math.round(confidence.value)}</b><br>${verdict}`,
+        '#ded2b8', str('ending.again'),
+      );
+    }
   }
 
   freecam.update(frameDt);

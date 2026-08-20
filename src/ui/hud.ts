@@ -12,6 +12,15 @@ export interface Hud {
   /** The conduct banner: reason and observer count, whenever conduct is
    *  active. A rule the player cannot see is not a rule, it is a trap. */
   setConduct(label: string | null, observers: number): void;
+  /** Handler confidence: 6px track, fills paper (bible §12). */
+  setConfidence(value: number, note: string): void;
+  /** Objective bottom-left, sentence case, with a distance readout. */
+  setObjective(label: string | null, distance: string | null): void;
+  /** Action prompt bottom-centre: keycap + label; progress 0..1 while a
+   *  hold is running; optional warning line under it. */
+  setPrompt(label: string | null, progress: number, sub: string | null): void;
+  /** End card. Fires once; the button reloads the run. */
+  showEnd(title: string, body: string, colour: string, button: string): void;
 }
 
 export function createHud(): Hud {
@@ -61,7 +70,76 @@ export function createHud(): Hud {
   note.textContent = 'NO ADVERSE TRACES';
   countRow.append(count, note);
   fileBox.appendChild(countRow);
+
+  // handler confidence under the file: 6px track, 1px border, fills paper
+  const confLabelRow = document.createElement('div');
+  confLabelRow.style.cssText =
+    'display:flex;justify-content:space-between;width:132px;margin-top:14px;align-items:baseline';
+  const confLabel = document.createElement('span');
+  confLabel.textContent = 'CONFIDENCE';
+  confLabel.style.cssText = `color:${MUTE};font:10px ${MONO};letter-spacing:0.24em`;
+  const confValue = document.createElement('span');
+  confValue.style.cssText = `color:${PAPER};font:700 12px ${MONO}`;
+  confLabelRow.append(confLabel, confValue);
+  const confTrack = document.createElement('div');
+  confTrack.style.cssText =
+    'width:132px;height:6px;border:1px solid rgba(222,210,184,0.22);margin-top:5px';
+  const confFill = document.createElement('div');
+  confFill.style.cssText = `height:100%;background:${PAPER};width:0%`;
+  confTrack.appendChild(confFill);
+  const confNote = document.createElement('div');
+  confNote.style.cssText =
+    `color:${MUTE};font:10px ${MONO};letter-spacing:0.08em;margin-top:5px;text-transform:uppercase`;
+  fileBox.append(confLabelRow, confTrack, confNote);
   root.appendChild(fileBox);
+
+  // bottom-left: the errand, sentence case (design canvas), with distance
+  const objBox = document.createElement('div');
+  objBox.style.cssText = 'position:absolute;left:30px;bottom:24px';
+  const objLabel = document.createElement('div');
+  objLabel.style.cssText = `color:${PAPER};font:13px ${MONO};letter-spacing:0.02em`;
+  const objDist = document.createElement('div');
+  objDist.style.cssText = `color:${MUTE};font:10px ${MONO};letter-spacing:0.16em;margin-top:4px`;
+  objBox.append(objLabel, objDist);
+  root.appendChild(objBox);
+
+  // bottom-centre: the action prompt — keycap in a 1px outlined box
+  const promptBox = document.createElement('div');
+  promptBox.style.cssText = [
+    'position:absolute', 'bottom:56px', 'left:50%', 'transform:translateX(-50%)',
+    'padding:9px 16px', 'background:rgba(20,18,14,0.88)', 'display:none',
+    'text-align:center',
+  ].join(';');
+  const promptRow = document.createElement('div');
+  promptRow.style.cssText = `color:${PAPER};font:12px ${MONO};letter-spacing:0.06em`;
+  const promptKey = document.createElement('span');
+  promptKey.textContent = 'F';
+  promptKey.style.cssText = [
+    'display:inline-block', 'border:1px solid rgba(222,210,184,0.55)',
+    'padding:1px 7px', 'margin-right:9px', `font:700 11px ${MONO}`,
+  ].join(';');
+  const promptLabel = document.createElement('span');
+  promptRow.append(promptKey, promptLabel);
+  const promptTrack = document.createElement('div');
+  promptTrack.style.cssText =
+    'height:3px;background:rgba(222,210,184,0.18);margin-top:7px;display:none';
+  const promptFill = document.createElement('div');
+  promptFill.style.cssText = `height:100%;background:${PAPER};width:0%`;
+  promptTrack.appendChild(promptFill);
+  const promptSub = document.createElement('div');
+  promptSub.style.cssText =
+    'color:#b8322c;font:10px ' + MONO + ';letter-spacing:0.08em;margin-top:6px;display:none';
+  promptBox.append(promptRow, promptTrack, promptSub);
+  root.appendChild(promptBox);
+
+  // end card: full-screen, shown once, reload to run again
+  const card = document.createElement('div');
+  card.style.cssText = [
+    'position:fixed', 'inset:0', 'background:rgba(14,12,9,0.94)', 'display:none',
+    'align-items:center', 'justify-content:center', 'text-align:center',
+    'pointer-events:auto', 'z-index:9',
+  ].join(';');
+  root.appendChild(card);
 
   // top-centre: the conduct banner (bible §12 — solid red when observed,
   // ink when not)
@@ -111,6 +189,55 @@ export function createHud(): Hud {
         pageEls[i]!.style.background =
           i < filled ? 'rgba(222,210,184,0.82)' : 'rgba(222,210,184,0.16)';
       }
+    },
+    setConfidence(value: number, noteText: string): void {
+      confValue.textContent = String(Math.round(value));
+      confFill.style.width = `${Math.max(0, Math.min(100, value))}%`;
+      confNote.textContent = noteText;
+    },
+    setObjective(label: string | null, distance: string | null): void {
+      objLabel.textContent = label ?? '';
+      objDist.textContent = distance ?? '';
+    },
+    setPrompt(label: string | null, progress: number, sub: string | null): void {
+      if (!label) {
+        promptBox.style.display = 'none';
+        return;
+      }
+      promptBox.style.display = 'block';
+      promptLabel.textContent = label;
+      promptKey.style.display = progress > 0 ? 'none' : 'inline-block';
+      promptTrack.style.display = progress > 0 ? 'block' : 'none';
+      promptFill.style.width = `${Math.round(progress * 100)}%`;
+      promptSub.style.display = sub ? 'block' : 'none';
+      promptSub.textContent = sub ?? '';
+    },
+    showEnd(title: string, body: string, colour: string, button: string): void {
+      if (card.style.display === 'flex') return;
+      const inner = document.createElement('div');
+      const eyebrow = document.createElement('div');
+      eyebrow.textContent = 'ZAMOSTYE · X.1978';
+      eyebrow.style.cssText =
+        `color:${colour};font:10px ${MONO};letter-spacing:0.3em;margin-bottom:18px`;
+      const h = document.createElement('div');
+      h.textContent = title.toUpperCase();
+      h.style.cssText =
+        `color:${PAPER};font:700 clamp(40px,7vw,70px) ${MONO};letter-spacing:-0.03em`;
+      const sub = document.createElement('div');
+      sub.innerHTML = body;
+      sub.style.cssText =
+        `color:${MUTE};font:13px ${MONO};letter-spacing:0.03em;margin-top:16px;line-height:1.7;max-width:420px`;
+      const btn = document.createElement('button');
+      btn.textContent = button;
+      btn.style.cssText = [
+        `color:${PAPER}`, 'background:none', 'border:1px solid rgba(222,210,184,0.4)',
+        `font:12px ${MONO}`, 'letter-spacing:0.2em', 'padding:10px 30px',
+        'margin-top:28px', 'cursor:pointer',
+      ].join(';');
+      btn.onclick = () => location.reload();
+      inner.append(eyebrow, h, sub, btn);
+      card.appendChild(inner);
+      card.style.display = 'flex';
     },
   };
 }

@@ -1,0 +1,31 @@
+{
+  "id": "ordinary_traffic",
+  "act": 1,
+  "date": "1978-10-14",
+  "brief": "handler.brief.ordinary_traffic",
+  "objectives": [
+    {
+      "id": "collect",
+      "type": "hold_at",
+      "pos": [-46, -14],
+      "seconds": 2.6,
+      "conduct": "service",
+      "label": "Service the dead drop",
+      "prompt": "service the drop",
+      "onComplete": [
+        { "set": "carrying", "value": true },
+        { "radio": "handler.now_carrying" }
+      ]
+    },
+    {
+      "id": "exit",
+      "type": "reach",
+      "pos": [0, 82],
+      "label": "Clear the district",
+      "revealIf": { "confidence": ">=33" }
+    }
+  ],
+  "fail": [
+    { "when": "file>=100", "ending": "burned" }
+  ]
+}
