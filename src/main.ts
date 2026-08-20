@@ -118,6 +118,12 @@ function routePoint(route: Route, t: number): [number, number] {
   return route[seg]!;
 }
 
+interface LineupLabel {
+  el: HTMLDivElement;
+  anchor: THREE.Vector3;
+}
+const lineupLabels: LineupLabel[] = [];
+
 async function spawnLineup(): Promise<void> {
   const names = ['militia', 'civilian_m', 'civilian_f', 'civilian_old', 'player'];
   for (let i = 0; i < names.length; i++) {
@@ -132,6 +138,30 @@ async function spawnLineup(): Promise<void> {
       x: actor.group.position.x, z: 0, yaw: 0.5,
       px: actor.group.position.x, pz: 0, pyaw: 0.5,
     });
+    const el = document.createElement('div');
+    el.textContent = names[i]!.toUpperCase().replace('_', ' ');
+    el.style.cssText = [
+      'position:fixed', 'transform:translate(-50%,-100%)', 'pointer-events:none',
+      'color:#ded2b8', 'background:rgba(20,18,14,0.85)', 'padding:3px 8px',
+      'font:10px SF Mono,Roboto Mono,Menlo,Consolas,monospace',
+      'letter-spacing:0.2em', 'white-space:nowrap',
+    ].join(';');
+    document.body.appendChild(el);
+    lineupLabels.push({
+      el,
+      anchor: new THREE.Vector3(
+        actor.group.position.x, 1.95 * asset.baseHeight, actor.group.position.z,
+      ),
+    });
+  }
+}
+
+const labelPos = new THREE.Vector3();
+function updateLineupLabels(): void {
+  for (const { el, anchor } of lineupLabels) {
+    labelPos.copy(anchor).project(camera);
+    el.style.left = `${(labelPos.x * 0.5 + 0.5) * innerWidth}px`;
+    el.style.top = `${(-labelPos.y * 0.5 + 0.5) * innerHeight}px`;
   }
 }
 
@@ -191,6 +221,8 @@ renderer.setAnimationLoop((nowMs: number) => {
     w.actor.group.rotation.y = w.pyaw + dyaw * alpha;
     w.actor.update(w.speed, frameDt);
   }
+
+  if (LINEUP) updateLineupLabels();
 
   if (GRADE_OFF) {
     renderer.render(scene, camera);
