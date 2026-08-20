@@ -356,6 +356,19 @@ def build_body(m):
                (sx*0.086,HC+0.016, 0.020),(sx*0.098,HC+0.016, 0.020),
                (sx*0.098,HC-0.028, 0.022),(sx*0.086,HC-0.028, 0.022)], HW)
 
+    # -- face features. Eyes on everyone: two dark blocks at the eye line —
+    # the single cheapest "this is a person, facing that way" signal there is.
+    b.set_material('Trim')
+    for sx in (-1,1):
+        b.box_at(sx*0.032, HC-0.013, 0.0955, 0.0095, 0.0055, 0.007, HW)
+    if m.get('moustache'):
+        b.set_material('Hair')
+        b.box_at(0, HC-0.052, 0.096, 0.032, 0.009, 0.014, HW)
+    if m.get('beard'):
+        b.set_material('Hair')
+        b.box_at(0, HC-0.104, 0.048, 0.048, 0.042, 0.046, HW)
+        b.box_at(0, HC-0.070, 0.076, 0.036, 0.020, 0.022, HW)   # up the jaw
+
     # -- hair: a cap slightly proud of the skull, pulled back so the face
     # stays clear; 'ring' leaves the crown bald.
     if m.get('hair') == 'full':
@@ -380,17 +393,35 @@ def build_body(m):
 # Small rigid meshes parented to a bone node; each part carries its own
 # material. Positions are bone-local. Returns [(bone, material, geom), ...].
 def att_peaked_cap(m):
+    # High Soviet crown: tall, slightly wider at the top than the band.
     crown = MeshBuilder(skinned=False)
-    r1=crown.sect(0,0.158,0,0.118,0.118,2.0); r2=crown.sect(0,0.226,0,0.106,0.106,2.0)
-    crown.stitch(r1,r2); crown.cap(r2,(0,0.226,0))
+    r1=crown.sect(0,0.158,0,0.118,0.118,2.0); r2=crown.sect(0,0.215,0.010,0.124,0.120,2.0)
+    r3=crown.sect(0,0.248,0.014,0.112,0.106,2.0)
+    crown.stitch(r1,r2); crown.stitch(r2,r3); crown.cap(r3,(0,0.250,0.014))
     band = MeshBuilder(skinned=False)
-    b1=band.sect(0,0.136,0,0.1205,0.1205,2.0); b2=band.sect(0,0.158,0,0.1185,0.1185,2.0)
+    b1=band.sect(0,0.134,0,0.1215,0.1215,2.0); b2=band.sect(0,0.158,0,0.1190,0.1190,2.0)
     band.stitch(b1,b2)
     brim = MeshBuilder(skinned=False)
-    brim.box_at(0,0.146,0.115, 0.1125,0.012,0.050)
+    brim.box_at(0,0.144,0.120, 0.1125,0.011,0.058)
     return [('Head','MilitiaCloth',crown.finish()),
             ('Head','State',band.finish()),
             ('Head','Trim',brim.finish())]
+
+def att_shoulder_boards(m):
+    out = []
+    for side in ('Left','Right'):
+        b = MeshBuilder(skinned=False, material='Boards')
+        sx = 1 if side == 'Left' else -1
+        b.box_at(sx*0.075, 0.022, 0.0, 0.062, 0.009, 0.034)
+        out.append((f'{side}Shoulder','Boards',b.finish()))
+    return out
+
+def att_muffler(m):
+    b = MeshBuilder(skinned=False, material='Muffler')
+    r1=b.sect(0,-0.005,0.006,0.082,0.078,2.3); r2=b.sect(0,0.042,0.002,0.072,0.070,2.3)
+    b.stitch(r1,r2)
+    b.box_at(0.028,-0.085,0.088, 0.036,0.070,0.013)   # tail down the chest
+    return [('Neck','Muffler',b.finish())]
 
 def att_flat_cap(m):
     b = MeshBuilder(skinned=False, material='CapCloth')
@@ -442,6 +473,8 @@ ATTACHMENTS = {
     'belt':       att_belt,
     'cane':       att_cane,
     'handbag':    att_handbag,
+    'shoulder_boards': att_shoulder_boards,
+    'muffler':    att_muffler,
 }
 
 # --------------------------------------------------------------- animation
@@ -568,15 +601,17 @@ def build_clips(spec):
 # Fixed part colours, all from the established palette / prototype coat set.
 FIXED_COLOURS = {
     'Skin':         '#b4a88e',   # bone — reads cream under the warm lights
-    'Legs':         '#46423a',   # road — trousers
     'Shoes':        '#35301f',   # trim — shoes and boots
     'Trim':         '#35301f',
     'CapCloth':     '#746a55',
     'MilitiaCloth': '#585c50',
     'State':        '#c0201f',   # red is the state's alone
     'Scarf':        '#77785f',   # sage — rust saturated toward red territory
+    'Boards':       '#c09550',   # ochre — rank boards read at distance
+    'Muffler':      '#8a7d66',
     'Outline':      '#231d15',   # swapped for BackSide ink by the runtime
 }
+# 'Legs' is per-archetype (trousers vs stockings), from mesh.legsColor.
 
 def hex_to_rgb(s):
     v = int(s.lstrip('#'), 16)
@@ -605,11 +640,12 @@ def export_glb(path, name, spec, body, attachments, clips, speeds):
         accs.append(acc)
         return len(accs)-1
 
-    mat_names = ['Body','Hair'] + list(FIXED_COLOURS.keys())
+    mat_names = ['Body','Hair','Legs'] + list(FIXED_COLOURS.keys())
     materials, MI = [], {}
     for mn in mat_names:
         if mn == 'Body': rgb = hex_to_rgb(spec['coats'][0])
         elif mn == 'Hair': rgb = hex_to_rgb(spec['mesh'].get('hairColor') or '#35301f')
+        elif mn == 'Legs': rgb = hex_to_rgb(spec['mesh'].get('legsColor') or '#46423a')
         else: rgb = hex_to_rgb(FIXED_COLOURS[mn])
         MI[mn] = len(materials)
         materials.append(Material(name=mn, pbrMetallicRoughness=PbrMetallicRoughness(

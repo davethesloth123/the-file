@@ -1,5 +1,5 @@
 {
-  "_comment": "Single source of truth for the cast. tools/character-generator.py reads mesh+gait to emit public/models/<name>.glb; the runtime reads model+coats. Walk gait params derive from the bible's base walk (36deg swing, 1.00s, 2.05 m/s); natural speeds are computed from stride geometry by the generator and baked into each GLB's extras, never typed by hand. hair: null | 'full' | 'ring' (balding). All colours from the established palette / prototype coat set.",
+  "_comment": "Single source of truth for the cast. tools/character-generator.py reads mesh+gait to emit public/models/<name>.glb; the runtime reads model+coats+mesh.height. Walk gait params derive from the bible's base walk (36deg swing, 1.00s, 2.05 m/s); natural speeds are computed from stride geometry by the generator and baked into each GLB's extras, never typed by hand. hair: null|'full'|'ring'. height is the archetype's base scale; per-instance variation multiplies it. All colours from the established palette / prototype coats.",
   "player": {
     "model": "models/player.glb",
     "coats": [
@@ -16,7 +16,11 @@
       "stoopDeg": 0,
       "attachments": [],
       "hair": "full",
-      "hairColor": "#35301f"
+      "hairColor": "#35301f",
+      "height": 1.0,
+      "moustache": false,
+      "beard": false,
+      "legsColor": "#46423a"
     },
     "gait": {
       "walk": {
@@ -38,7 +42,7 @@
       "#585c50"
     ],
     "mesh": {
-      "shoulder": 1.12,
+      "shoulder": 1.18,
       "waist": 1.02,
       "weight": 1.04,
       "limb": 1.02,
@@ -49,10 +53,15 @@
       "attachments": [
         "peaked_cap",
         "collar_tab",
-        "belt"
+        "belt",
+        "shoulder_boards"
       ],
       "hair": null,
-      "hairColor": null
+      "hairColor": null,
+      "height": 1.05,
+      "moustache": false,
+      "beard": false,
+      "legsColor": "#46423a"
     },
     "gait": {
       "walk": {
@@ -85,10 +94,15 @@
       "boots": false,
       "stoopDeg": 0,
       "attachments": [
-        "flat_cap"
+        "flat_cap",
+        "muffler"
       ],
       "hair": null,
-      "hairColor": null
+      "hairColor": null,
+      "height": 1.0,
+      "moustache": true,
+      "beard": false,
+      "legsColor": "#46423a"
     },
     "gait": {
       "walk": {
@@ -112,12 +126,12 @@
       "#b4a88e"
     ],
     "mesh": {
-      "shoulder": 0.85,
+      "shoulder": 0.8,
       "waist": 0.96,
       "weight": 0.97,
       "limb": 0.94,
       "coatHem": 0.56,
-      "coatFlare": 1.28,
+      "coatFlare": 1.35,
       "boots": false,
       "stoopDeg": 0,
       "attachments": [
@@ -125,7 +139,11 @@
         "handbag"
       ],
       "hair": null,
-      "hairColor": null
+      "hairColor": null,
+      "height": 0.93,
+      "moustache": false,
+      "beard": false,
+      "legsColor": "#8a7d66"
     },
     "gait": {
       "walk": {
@@ -148,19 +166,23 @@
       "#413d31"
     ],
     "mesh": {
-      "shoulder": 0.92,
+      "shoulder": 0.88,
       "waist": 0.98,
-      "weight": 0.94,
+      "weight": 0.92,
       "limb": 0.88,
       "coatHem": 0.72,
       "coatFlare": 1.0,
       "boots": false,
-      "stoopDeg": 16,
+      "stoopDeg": 18,
       "attachments": [
         "cane"
       ],
       "hair": "ring",
-      "hairColor": "#a79e88"
+      "hairColor": "#a79e88",
+      "height": 0.9,
+      "moustache": false,
+      "beard": true,
+      "legsColor": "#35301f"
     },
     "gait": {
       "walk": {

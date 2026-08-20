@@ -13,6 +13,7 @@ import { Locomotion } from './locomotion';
 interface ArchetypeSpec {
   model: string;
   coats: string[];
+  mesh?: { height?: number };
 }
 
 const ARCHETYPES = archetypesJson as unknown as Record<string, ArchetypeSpec | string>;
@@ -23,6 +24,8 @@ export interface ArchetypeAsset {
   clips: THREE.AnimationClip[];
   naturalSpeeds: Record<string, number>;
   coats: string[];
+  /** Archetype base scale; per-instance variation multiplies it. */
+  baseHeight: number;
 }
 
 const loader = new GLTFLoader();
@@ -48,6 +51,7 @@ export function loadArchetype(name: string): Promise<ArchetypeAsset> {
           clips: gltf.animations,
           naturalSpeeds: extras?.naturalSpeeds ?? {},
           coats: spec.coats,
+          baseHeight: spec.mesh?.height ?? 1,
         };
       });
     cache.set(name, pending);
@@ -68,7 +72,8 @@ export class Actor {
       }
     });
     // Group scale scales about the feet, so this is genuine height variation.
-    if (options.height !== undefined) this.group.scale.setScalar(options.height);
+    // options.height is per-instance variation on top of the archetype base.
+    this.group.scale.setScalar(asset.baseHeight * (options.height ?? 1));
     this.group.add(root);
     this.locomotion = new Locomotion(new THREE.AnimationMixer(root), asset.clips, asset.naturalSpeeds);
   }

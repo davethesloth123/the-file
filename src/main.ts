@@ -99,16 +99,17 @@ const OUTER: Route = [[-13, 7], [13, 7], [13, -3], [-13, -3]];
 const INNER: Route = [[-8, 3], [-8, -7], [8, -7], [8, 3]];
 
 // Speeds chosen to exercise the stride lock: several at their archetype's
-// natural walk (timeScale 1), some off-natural, one at jog. Values shown in
-// the reviewer note below; these are demo-scene inputs, not tuning.
+// natural walk (timeScale 1), some off-natural, one at jog. Heights are
+// per-instance variation on top of the archetype base. Demo-scene inputs,
+// not tuning.
 const CAST: [archetype: string, route: Route, phase: number, speed: number, height: number, coatIndex: number][] = [
-  ['militia',      OUTER, 0.00, 1.759, 1.02, 0],
-  ['militia',      OUTER, 0.50, 1.4,   1.0,  0],
+  ['militia',      OUTER, 0.00, 1.759, 1.0,  0],
+  ['militia',      OUTER, 0.50, 1.4,   0.98, 0],
   ['civilian_m',   OUTER, 0.25, 2.05,  0.97, 1],
-  ['civilian_m',   INNER, 0.10, 2.6,   1.05, 3],
-  ['civilian_f',   OUTER, 0.75, 2.053, 0.95, 0],
-  ['civilian_f',   INNER, 0.60, 4.05,  0.99, 2],
-  ['civilian_old', INNER, 0.35, 1.329, 0.94, 1],
+  ['civilian_m',   INNER, 0.10, 2.6,   1.05, 2],
+  ['civilian_f',   OUTER, 0.75, 2.053, 0.98, 0],
+  ['civilian_f',   INNER, 0.60, 4.05,  1.03, 2],
+  ['civilian_old', INNER, 0.35, 1.329, 1.0,  1],
   ['player',       INNER, 0.85, 2.05,  1.0,  0],
 ];
 
