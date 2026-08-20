@@ -45,6 +45,18 @@ function loadTiling(path: string): THREE.Texture {
   return t;
 }
 
+const colorCache = new Map<string, THREE.MeshToonMaterial>();
+
+/** Plain toon material for one-off coloured props (cars etc.) — no maps. */
+export function toonColor(hex: string): THREE.MeshToonMaterial {
+  let m = colorCache.get(hex);
+  if (!m) {
+    m = new THREE.MeshToonMaterial({ color: hex, gradientMap: toonRamp() });
+    colorCache.set(hex, m);
+  }
+  return m;
+}
+
 const materialCache = new Map<string, THREE.MeshToonMaterial>();
 
 export function worldMaterial(name: string): THREE.MeshToonMaterial {
