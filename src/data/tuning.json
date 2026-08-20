@@ -17,6 +17,29 @@
       { "dist": 9.8, "shoulder": 0.0, "focus": 1.75, "pitch": 0.36, "fov": 52 }
     ]
   },
+  "vision": {
+    "range": 17.0,
+    "fovDeg": 62,
+    "alertRise": 2.0,
+    "alertFall": 0.9,
+    "loseTime": 2.6
+  },
+  "file": {
+    "max": 100,
+    "tiers": [
+      { "at": 0, "label": "No adverse traces" },
+      { "at": 11, "label": "One sighting logged" },
+      { "at": 35, "label": "Multiple sightings logged" },
+      { "at": 63, "label": "Referred for surveillance" },
+      { "at": 87, "label": "Detention order pending" }
+    ]
+  },
+  "patrol": {
+    "faceRate": 3.4,
+    "turnRate": 3.2,
+    "alertFaceThreshold": 0.4,
+    "waypointRadius": 0.7
+  },
   "locomotion": {
     "blendTime": 0.22,
     "timeScaleClamp": [0.6, 1.75],

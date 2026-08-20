@@ -63,6 +63,7 @@ interface MapData {
   roadDashes: { from: [number, number]; to: [number, number] }[];
   crossings: { pos: [number, number]; len: number; across: string }[];
   bounds: { x: [number, number]; z: [number, number] };
+  patrols: { route: [number, number][] }[];
   colliders: { type: string; pos: [number, number]; size: [number, number] }[];
   restricted: { id: string; pos: [number, number]; r: number; label: string }[];
   waypoints: Record<string, [number, number]>;
@@ -74,6 +75,7 @@ export interface LevelData {
   surfaces: Surface[];
   occluders: THREE.Object3D[];
   npcs: NpcSpawn[];
+  patrols: { route: [number, number][] }[];
   waypoints: Record<string, [number, number]>;
   spawns: Record<string, [number, number]>;
   restricted: { id: string; pos: [number, number]; r: number; label: string }[];
@@ -512,7 +514,7 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
       if (b.open === 'works') {
         for (const tt of [-Wt / 4, Wt / 4]) {
           const [bx, bz] = worldOfF(tt, Din * 0.62);
-          bag.cylinder('rust_metal', 1.05, 1.05, 4.2, 12, bx, 1.35, bz, Math.PI / 2, entranceAxis === 'z' ? 0 : Math.PI / 2);
+          bag.cylinder('rust_metal', 1.05, 1.05, 4.3, 12, bx, 1.35, bz, Math.PI / 2, entranceAxis === 'z' ? 0 : Math.PI / 2);
           putF('concrete_stone', 2.4, 0.5, 1.0, tt, 0.25, Din * 0.62);
         }
         for (let i = 0; i < 4; i++) {
@@ -674,7 +676,7 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
       // duty desk facing the door, the state's colours behind it — and the
       // cells: a barred block along one side, one door left open
       bulb(0, 2.7, 3.6);
-      putF('roof', 4.2, 1.05, 0.7, 0.4, 0.68, 4.6);
+      putF('roof', 4.1, 1.05, 0.7, 0.4, 0.68, 4.6);
       putF('state_red', 1.6, 0.9, 0.06, 0.4, 2.2, 6.2);
       putF('roof', 1.6, 0.5, 0.4, -innerT + 1.0, 0.41, 2.0);
       // cell block along the tangent-min wall, before the stair hall
@@ -1152,6 +1154,7 @@ export function buildLevel(scene: THREE.Scene): LevelData {
     surfaces,
     occluders,
     npcs,
+    patrols: map.patrols,
     waypoints: map.waypoints,
     spawns: map.spawns,
     restricted: map.restricted,

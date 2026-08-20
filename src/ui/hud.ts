@@ -9,6 +9,9 @@ const MUTE = 'rgba(222,210,184,0.42)';
 export interface Hud {
   setLocation(text: string): void;
   setFilePages(count: number, note: string): void;
+  /** The conduct banner: reason and observer count, whenever conduct is
+   *  active. A rule the player cannot see is not a rule, it is a trap. */
+  setConduct(label: string | null, observers: number): void;
 }
 
 export function createHud(): Hud {
@@ -60,6 +63,20 @@ export function createHud(): Hud {
   fileBox.appendChild(countRow);
   root.appendChild(fileBox);
 
+  // top-centre: the conduct banner (bible §12 — solid red when observed,
+  // ink when not)
+  const banner = document.createElement('div');
+  banner.style.cssText = [
+    'position:absolute', 'top:22px', 'left:50%', 'transform:translateX(-50%)',
+    'padding:8px 18px', 'text-align:center', 'display:none',
+    `font:11px ${MONO}`, 'letter-spacing:0.2em', 'color:#ded2b8',
+  ].join(';');
+  const bannerReason = document.createElement('div');
+  const bannerSub = document.createElement('div');
+  bannerSub.style.cssText = `font:10px ${MONO};letter-spacing:0.08em;margin-top:4px;opacity:0.8`;
+  banner.append(bannerReason, bannerSub);
+  root.appendChild(banner);
+
   // bottom-right: controls, quietly
   const keysHint = document.createElement('div');
   keysHint.style.cssText = [
@@ -74,12 +91,25 @@ export function createHud(): Hud {
     setLocation(text: string): void {
       loc.textContent = text;
     },
+    setConduct(label: string | null, observers: number): void {
+      if (!label) {
+        banner.style.display = 'none';
+        return;
+      }
+      banner.style.display = 'block';
+      banner.style.background = observers > 0 ? 'rgba(184,50,44,0.92)' : 'rgba(20,18,14,0.85)';
+      bannerReason.textContent = label.toUpperCase();
+      bannerSub.textContent = observers > 0
+        ? `OBSERVED · ${observers} ${observers === 1 ? 'WATCHER' : 'WATCHERS'}`
+        : 'UNOBSERVED';
+    },
     setFilePages(n: number, noteText: string): void {
       count.textContent = String(n);
       note.textContent = noteText;
+      const filled = Math.round((n / 100) * pageEls.length);
       for (let i = 0; i < pageEls.length; i++) {
         pageEls[i]!.style.background =
-          i < n ? 'rgba(222,210,184,0.82)' : 'rgba(222,210,184,0.16)';
+          i < filled ? 'rgba(222,210,184,0.82)' : 'rgba(222,210,184,0.16)';
       }
     },
   };
