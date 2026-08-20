@@ -20,11 +20,21 @@
     },
     {
       "pos": [
-        0,
+        -31.6,
         0
       ],
       "size": [
-        210,
+        146.8,
+        24
+      ]
+    },
+    {
+      "pos": [
+        81.6,
+        0
+      ],
+      "size": [
+        46.8,
         24
       ]
     }
@@ -78,18 +88,11 @@
         26,
         25
       ],
-      "floors": 4,
+      "floors": 2,
       "style": "render_bone",
-      "seed": 103,
-      "wings": [
-        {
-          "dx": -15,
-          "dz": -10,
-          "w": 9,
-          "d": 9,
-          "floorsDelta": -2
-        }
-      ]
+      "seed": 203,
+      "open": "shops",
+      "units": 3
     },
     {
       "id": "b4",
@@ -140,7 +143,8 @@
       ],
       "floors": 4,
       "style": "brick_rust",
-      "seed": 106
+      "seed": 106,
+      "chamfer": true
     },
     {
       "id": "b7",
@@ -154,7 +158,8 @@
       ],
       "floors": 7,
       "style": "stucco_ochre",
-      "seed": 107
+      "seed": 107,
+      "open": "flats"
     },
     {
       "id": "b8",
@@ -183,7 +188,7 @@
       "floors": 4,
       "style": "render_bone",
       "seed": 109,
-      "yawDeg": 4
+      "yawDeg": 7
     },
     {
       "id": "b10",
@@ -198,7 +203,7 @@
       "floors": 3,
       "style": "brick_rust",
       "seed": 110,
-      "yawDeg": -3,
+      "yawDeg": -6,
       "wings": [
         {
           "dx": 9,
@@ -222,7 +227,7 @@
       "floors": 5,
       "style": "stucco_ochre",
       "seed": 111,
-      "yawDeg": -4
+      "yawDeg": -7
     },
     {
       "id": "b12",
@@ -237,7 +242,7 @@
       "floors": 4,
       "style": "render_sage",
       "seed": 112,
-      "yawDeg": 3
+      "yawDeg": 5
     },
     {
       "id": "station",
@@ -252,7 +257,8 @@
       "floors": 3,
       "style": "concrete_stone",
       "seed": 113,
-      "stateLintel": true
+      "stateLintel": true,
+      "open": "station"
     },
     {
       "id": "records",
@@ -286,20 +292,56 @@
       "yawDeg": 0,
       "chimney": true,
       "open": "works"
+    },
+    {
+      "id": "motorpool",
+      "pos": [
+        57,
+        51
+      ],
+      "size": [
+        16,
+        10
+      ],
+      "floors": 1,
+      "style": "brick_rust",
+      "seed": 116,
+      "open": "motorpool"
+    },
+    {
+      "id": "house1",
+      "pos": [
+        -51,
+        19
+      ],
+      "size": [
+        7,
+        8
+      ],
+      "floors": 1,
+      "style": "render_sage",
+      "seed": 117,
+      "kind": "house",
+      "yawDeg": 6
+    },
+    {
+      "id": "house2",
+      "pos": [
+        47,
+        66
+      ],
+      "size": [
+        8,
+        7
+      ],
+      "floors": 2,
+      "style": "stucco_ochre",
+      "seed": 118,
+      "kind": "house",
+      "yawDeg": -8
     }
   ],
   "garages": [
-    {
-      "pos": [
-        57,
-        50
-      ],
-      "size": [
-        15,
-        5.2
-      ],
-      "yawDeg": 8
-    },
     {
       "pos": [
         -62,
@@ -343,17 +385,6 @@
       "to": [
         -36,
         12
-      ],
-      "h": 2.0
-    },
-    {
-      "from": [
-        44,
-        44
-      ],
-      "to": [
-        50,
-        44
       ],
       "h": 2.0
     }
@@ -1039,5 +1070,15 @@
       "len": 8.5,
       "across": "x"
     }
-  ]
+  ],
+  "bounds": {
+    "x": [
+      -100,
+      100
+    ],
+    "z": [
+      -108,
+      108
+    ]
+  }
 }

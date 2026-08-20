@@ -19,6 +19,7 @@ import { Actor, loadArchetype } from './actors/actor';
 import { PlayerState } from './actors/player';
 import { buildLevel } from './world/level';
 import { CollisionWorld } from './world/collision';
+import { createHud } from './ui/hud';
 
 const QUERY = new URLSearchParams(location.search);
 const GRADE_OFF = QUERY.get('grade') === 'off';
@@ -72,9 +73,22 @@ addEventListener('resize', resize);
 resize();
 
 // --------------------------------------------------------------- input
+// Shift is tracked via the modifier flag on every key event — more robust
+// than matching the 'Shift' key itself across browsers and focus changes.
 const keys = new Set<string>();
-addEventListener('keydown', (e) => keys.add(e.key.toLowerCase()));
-addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+let shiftHeld = false;
+addEventListener('keydown', (e) => {
+  keys.add(e.key.toLowerCase());
+  shiftHeld = e.shiftKey;
+});
+addEventListener('keyup', (e) => {
+  keys.delete(e.key.toLowerCase());
+  shiftHeld = e.shiftKey;
+});
+addEventListener('blur', () => {
+  keys.clear();
+  shiftHeld = false;
+});
 const held = (k: string): number => (keys.has(k) ? 1 : 0);
 
 // ------------------------------------------------------------- walkers
@@ -200,6 +214,21 @@ const trailing = new TrailingCamera(camera, renderer.domElement);
 async function startPlay(): Promise<void> {
   const level = buildLevel(scene);
   world = new CollisionWorld(level.walls, level.surfaces);
+  createHud();
+  // interior NPCs: shopkeepers, the clerk, the duty officer, the mechanic
+  void (async () => {
+    for (const n of level.npcs) {
+      const asset = await loadArchetype(n.archetype);
+      const actor = new Actor(asset, { coat: asset.coats[(n.coatIndex ?? 0) % asset.coats.length]! });
+      actor.group.position.set(n.pos[0], n.y, n.pos[1]);
+      actor.group.rotation.y = (n.yawDeg * Math.PI) / 180;
+      scene.add(actor.group);
+      walkers.push({
+        actor, route: [], target: 0, speed: 0,
+        x: n.pos[0], z: n.pos[1], yaw: 0, px: n.pos[0], pz: n.pos[1], pyaw: 0,
+      });
+    }
+  })();
   // ?pos=x,z[,y] — dev spawn override for testing interiors
   const posParam = QUERY.get('pos');
   let spawn = level.spawns['player'] ?? ([0, 0] as [number, number]);
@@ -244,18 +273,20 @@ renderer.setAnimationLoop((nowMs: number) => {
       player.step(dt, {
         forward: held('w') - held('s'),
         strafe: held('d') - held('a'),
-        hurrying: keys.has('shift'),
+        hurrying: shiftHeld,
       }, trailing.yaw + Math.PI, world);
     }
   });
 
   for (const w of walkers) {
-    if (!w.route.length) continue;
-    w.actor.group.position.set(
-      w.px + (w.x - w.px) * alpha, 0, w.pz + (w.z - w.pz) * alpha,
-    );
-    const dyaw = ((w.yaw - w.pyaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-    w.actor.group.rotation.y = w.pyaw + dyaw * alpha;
+    if (w.route.length) {
+      w.actor.group.position.set(
+        w.px + (w.x - w.px) * alpha, 0, w.pz + (w.z - w.pz) * alpha,
+      );
+      const dyaw = ((w.yaw - w.pyaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+      w.actor.group.rotation.y = w.pyaw + dyaw * alpha;
+    }
+    // routeless walkers (interior NPCs, the lineup) still animate
     w.actor.update(w.speed, frameDt);
   }
 

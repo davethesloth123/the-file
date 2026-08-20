@@ -107,6 +107,48 @@ def main():
     save('metal_albedo.png', a)
     save('metal_grime.png', streaks(63, 0.55, beta=1.8))
 
+    # -- cobblestones: cellular bumps with dark joints (1024 for crispness)
+    rng = np.random.default_rng(71)
+    NC = 1024
+    gx, gy = np.meshgrid(np.arange(NC), np.arange(NC))
+    cell = 64
+    jx = rng.uniform(-0.35, 0.35, (NC//cell+2, NC//cell+2))
+    jy = rng.uniform(-0.35, 0.35, (NC//cell+2, NC//cell+2))
+    cx = (gx // cell).astype(int); cy = (gy // cell).astype(int)
+    # distance to jittered cell centre, wrapped
+    px = (gx % cell) / cell - 0.5 - jx[cy, cx]
+    py = (gy % cell) / cell - 0.5 - jy[cy, cx]
+    d = np.sqrt(px*px + py*py)
+    stone = np.clip(1.0 - d*1.9, 0, 1)**0.6
+    val = 0.36 + stone*0.28
+    per = rng.uniform(-0.05, 0.05, (NC//cell+2, NC//cell+2))
+    val += per[cy, cx]
+    Image.fromarray((np.clip(val,0,1)*255).astype(np.uint8), 'L').save(
+        os.path.join(OUT, 'cobble_albedo.png'), optimize=True)
+    print('cobble_albedo.png (1024)')
+    save('cobble_grime.png', streaks(72, 0.30, beta=2.4))
+
+    # -- floorboards: board stripes + along-grain streaks
+    a = albedo_base(81, 0.07, beta=2.0)
+    xx = np.arange(N)[None, :]
+    board_w = N//8
+    joint = ((xx % board_w) < 2).astype(float)
+    rngb = np.random.default_rng(82)
+    boards = np.repeat(rngb.uniform(-0.07, 0.07, N//board_w + 1), board_w)[:N]
+    grain = fbm(83, 1.8, aniso=0.15)      # streaks along y (grain)
+    a = a + boards[None, :N][0][None, :] * np.ones((N,1)) + (grain-0.5)*0.10 - joint*0.13
+    save('planks_albedo.png', a)
+    save('planks_grime.png', streaks(84, 0.35, beta=2.2))
+
+    # -- shop floor tile: checker with wear
+    a = albedo_base(91, 0.04, beta=3.0)
+    tile = N//16
+    check = (((np.arange(N)[:,None]//tile) + (np.arange(N)[None,:]//tile)) % 2).astype(float)
+    seam = (((np.arange(N)[:,None] % tile) < 1) | ((np.arange(N)[None,:] % tile) < 1)).astype(float)
+    a = a + check*0.10 - 0.05 - seam*0.12
+    save('tile_albedo.png', a)
+    save('tile_grime.png', streaks(92, 0.28, beta=2.6))
+
     total = sum(os.path.getsize(os.path.join(OUT, f))
                 for f in os.listdir(OUT) if f.endswith('.png'))
     print(f'total {total//1024}KB')
