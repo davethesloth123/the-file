@@ -5,11 +5,15 @@ Reads src/data/archetypes.json (the single source of truth for the cast) and
 emits one GLB per archetype into public/models/. Every archetype shares the
 same 25-bone Mixamo-named skeleton and the same clip set (idle / walk / jog /
 crouch), so one animation library drives all of them; archetypes differ by
-silhouette (shoulders, waist, weight, coat length, boots, stoop, attachments)
-and by walk gait.
+silhouette (shoulders, waist, weight, coat length, boots, stoop, hair,
+attachments) and by walk gait.
 
-Bodies are lofted from anatomical cross-sections (superelliptical — torsos are
-wider than deep). See docs/THE-FILE-bible-v2.md §9.
+The body is split into material groups so each figure reads at a glance:
+Body (coat — per-instance colour at runtime), Skin (face, neck, hands),
+Hair, Legs (trousers), Shoes/boots — plus attachment materials. An
+inverted-hull outline shell (verts pushed 16mm along normals, bible §9) is
+baked in as a primitive with material 'Outline'; the runtime swaps that
+material for BackSide ink instead of rebuilding shells per instance.
 
 SIGN CONVENTION (limb bones point downward, -Y):
     hip flexion   (leg swings forward) = NEGATIVE X
@@ -17,12 +21,10 @@ SIGN CONVENTION (limb bones point downward, -Y):
     elbow flexion (hand comes up)      = NEGATIVE X
 
 Natural ground speeds are DERIVED, not invented: the bible's base walk
-(36° swing over 1.00s) is defined as 2.05 m/s, and every variant's speed
-follows from stride geometry:  speed = K * sin(swing) / duration  with
-K calibrated so the base walk is exactly 2.05. Jog keeps the bible's
-authored 4.05 (its params are unchanged from the bible clip). The speeds
-are baked into each GLB's root `extras.naturalSpeeds` so the runtime never
-hardcodes them.
+(36° swing over 1.00s) is defined as 2.05 m/s and every variant's speed
+follows from stride geometry (speed = K·sin(swing)/duration, K calibrated to
+the base walk). Jog keeps the bible's authored 4.05. Speeds are baked into
+each GLB's root `extras.naturalSpeeds` so the runtime never hardcodes them.
 
 Run from the repo root or tools/:  python3 tools/character-generator.py
 """
@@ -36,6 +38,8 @@ from pygltflib import (GLTF2, Scene, Node, Mesh, Primitive, Attributes, Buffer,
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ARCHETYPES = json.load(open(os.path.join(ROOT, 'src/data/archetypes.json')))
 OUT_DIR = os.path.join(ROOT, 'public/models')
+
+OUTLINE_THICKNESS = 0.016   # bible §9
 
 # ---------------------------------------------------------------- skeleton
 J = {
@@ -93,11 +97,19 @@ def spine_weights(y):
 
 # ------------------------------------------------------------------ builder
 class MeshBuilder:
-    """Accumulates one primitive. `skinned=False` builds attachment meshes
-    with no joint data (they are parented to a bone node instead)."""
-    def __init__(self, skinned=True):
-        self.verts, self.joints, self.weights, self.tris = [], [], [], []
+    """Accumulates vertices plus per-material triangle groups. `skinned=False`
+    builds attachment meshes with no joint data (bone-node parented)."""
+    def __init__(self, skinned=True, material='Body'):
+        self.verts, self.joints, self.weights = [], [], []
+        self.groups = {}
+        self.material = material
         self.skinned = skinned
+
+    def set_material(self, name):
+        self.material = name
+
+    def _tris(self):
+        return self.groups.setdefault(self.material, [])
 
     def add_vert(self, p, bw=None):
         self.verts.append(tuple(p))
@@ -119,20 +131,22 @@ class MeshBuilder:
             x=cx+rx*math.copysign(abs(ca)**(2.0/n),ca)
             z=cz+rz*math.copysign(abs(sa)**(2.0/n),sa)
             w = bw((x,cy,z)) if callable(bw) else bw
-            self.add_vert((x,cy,z), w if w else spine_weights(cy))
+            self.add_vert((x,cy,z), w if w else (spine_weights(cy) if self.skinned else None))
         return base
 
     def stitch(self, a, b):
+        t=self._tris()
         for i in range(SEG):
             j=(i+1)%SEG
-            self.tris.extend([a+i,b+i,a+j, a+j,b+i,b+j])
+            t.extend([a+i,b+i,a+j, a+j,b+i,b+j])
 
-    def cap(self, base, c, bw, flip=False):
+    def cap(self, base, c, bw=None, flip=False):
         w = bw(c) if callable(bw) else bw
-        ci=self.add_vert(c, w)
+        ci=self.add_vert(c, w if w else (spine_weights(c[1]) if self.skinned else None))
+        t=self._tris()
         for i in range(SEG):
             j=(i+1)%SEG
-            self.tris.extend([ci,base+j,base+i] if flip else [ci,base+i,base+j])
+            t.extend([ci,base+j,base+i] if flip else [ci,base+i,base+j])
 
     def loft(self, levels, bw=None, capTop=True, capBot=True, n=2.0):
         rings=[]
@@ -141,10 +155,10 @@ class MeshBuilder:
         for a,b in zip(rings,rings[1:]): self.stitch(a,b)
         if capBot:
             y,_,_,zo = levels[0]
-            self.cap(rings[0],(0,y,zo), bw if bw else spine_weights(y), flip=True)
+            self.cap(rings[0],(0,y,zo), bw, flip=True)
         if capTop:
             y,_,_,zo = levels[-1]
-            self.cap(rings[-1],(0,y,zo), bw if bw else spine_weights(y))
+            self.cap(rings[-1],(0,y,zo), bw)
         return rings
 
     def chain(self, pts):
@@ -161,9 +175,10 @@ class MeshBuilder:
     def box(self, pts, bw=None):
         b=len(self.verts)
         for p in pts: self.add_vert(p, bw)
+        t=self._tris()
         for f in [(0,1,2),(0,2,3),(4,6,5),(4,7,6),(0,4,5),(0,5,1),
                   (3,2,6),(3,6,7),(0,3,7),(0,7,4),(1,5,6),(1,6,2)]:
-            self.tris.extend([b+f[0],b+f[1],b+f[2]])
+            t.extend([b+f[0],b+f[1],b+f[2]])
 
     def box_at(self, cx,cy,cz, hw,hh,hd, bw=None):
         self.box([(cx-hw,cy+hh,cz-hd),(cx+hw,cy+hh,cz-hd),(cx+hw,cy-hh,cz-hd),(cx-hw,cy-hh,cz-hd),
@@ -171,14 +186,15 @@ class MeshBuilder:
 
     def finish(self):
         verts=np.array(self.verts,dtype=np.float32)
-        tris=np.array(self.tris,dtype=np.uint16)
+        all_tris=np.array([i for g in self.groups.values() for i in g],dtype=np.uint16)
         norms=np.zeros_like(verts)
-        f=tris.reshape(-1,3)
+        f=all_tris.reshape(-1,3)
         fn=np.cross(verts[f[:,1]]-verts[f[:,0]], verts[f[:,2]]-verts[f[:,0]])
         for i in range(3): np.add.at(norms,f[:,i],fn)
         ln=np.linalg.norm(norms,axis=1,keepdims=True); ln[ln==0]=1
         norms/=ln
-        out={'position':verts,'normal':norms,'index':tris}
+        out={'position':verts,'normal':norms,
+             'groups':{k:np.array(v,dtype=np.uint16) for k,v in self.groups.items()}}
         if self.skinned:
             out['skinIndex']=np.array(self.joints,dtype=np.uint16)
             out['skinWeight']=np.array(self.weights,dtype=np.float32)
@@ -199,7 +215,7 @@ def build_body(m):
         else: f = waist + (shoulder-waist)*(y-1.16)/(1.30-1.16)
         return f * weight
 
-    TORSO = [
+    TORSO_BODY = [
         (0.855, 0.163, 0.122, 0.000),
         (0.930, 0.170, 0.126, 0.000),
         (1.010, 0.152, 0.114, 0.002),
@@ -208,11 +224,17 @@ def build_body(m):
         (1.235, 0.180, 0.130, 0.002),   # ribcage
         (1.320, 0.194, 0.129, 0.000),   # chest
         (1.395, 0.188, 0.117,-0.002),   # shoulder line
-        (1.445, 0.116, 0.098,-0.004),   # trapezius
-        (1.490, 0.061, 0.060,-0.004),   # neck base
+        (1.445, 0.116, 0.098,-0.004),   # trapezius — collar line
+    ]
+    TORSO_NECK = [
+        (1.445, 0.116, 0.098,-0.004),
+        (1.490, 0.061, 0.060,-0.004),
         (1.545, 0.056, 0.057,-0.002),
     ]
-    b.loft([(y, rx*tf(y), rz*weight, zo) for (y,rx,rz,zo) in TORSO], n=2.6)
+    b.set_material('Body')
+    b.loft([(y, rx*tf(y), rz*weight, zo) for (y,rx,rz,zo) in TORSO_BODY], n=2.6)
+    b.set_material('Skin')
+    b.loft([(y, rx*tf(y), rz*weight, zo) for (y,rx,rz,zo) in TORSO_NECK], n=2.6, capBot=False)
 
     # -- coat, lofted from hem to collar. Below the hip line the hem is
     # part-weighted to the near-side UpLeg so a long coat swings with the
@@ -244,12 +266,14 @@ def build_body(m):
         rz = hem_rz + (0.152-hem_rz)*t
         lower.append((y, rx, rz, 0.0))
     COAT = lower + top
+    b.set_material('Body')
     b.loft([(y, rx*(tf(y) if y>1.0 else weight), rz*weight, zo) for (y,rx,rz,zo) in COAT],
            bw=coat_w, capTop=False, n=2.7)
 
     # -- limbs
     boots = m['boots']
     for s in ('Left','Right'):
+        b.set_material('Body')   # sleeves
         r=b.chain([(f'{s}Arm',f'{s}ForeArm',0.00,0.086*limb*shoulder),
                    (f'{s}Arm',f'{s}ForeArm',0.18,0.068*limb),
                    (f'{s}Arm',f'{s}ForeArm',0.55,0.058*limb),
@@ -258,6 +282,7 @@ def build_body(m):
                    (f'{s}ForeArm',f'{s}Hand',0.62,0.044*limb),
                    (f'{s}ForeArm',f'{s}Hand',1.00,0.036*limb)])
         b.cap(r[0], tuple(np.array(J[f'{s}Arm'])+np.array([0,0.03,0])), [(f'{s}Arm',1.0)])
+        b.set_material('Skin')   # bare hands
         hp=np.array(J[f'{s}Hand'])
         h1=b.sect(hp[0],hp[1]-0.02,0.004,0.046,0.026,2.4,[(f'{s}Hand',1.0)])
         h2=b.sect(hp[0],hp[1]-0.070,0.010,0.043,0.024,2.4,[(f'{s}Hand',1.0)])
@@ -265,27 +290,40 @@ def build_body(m):
         b.stitch(r[-1],h1); b.stitch(h1,h2); b.stitch(h2,h3)
         b.cap(h3,(hp[0],hp[1]-0.112,0.012),[(f'{s}Hand',1.0)])
 
-        ankle_r = 0.058 if boots else 0.044*limb
-        lr=b.chain([(f'{s}UpLeg',f'{s}Leg',0.00,0.108*limb),
-                    (f'{s}UpLeg',f'{s}Leg',0.28,0.098*limb),
-                    (f'{s}UpLeg',f'{s}Leg',0.70,0.080*limb),
-                    (f'{s}UpLeg',f'{s}Leg',1.00,0.069*limb),
-                    (f'{s}Leg',f'{s}Foot',0.18,0.076*limb),   # calf
-                    (f'{s}Leg',f'{s}Foot',0.55,0.066 if boots else 0.061*limb),
-                    (f'{s}Leg',f'{s}Foot',1.00,ankle_r)])
+        # legs: trousers to the boundary, then shoes/boots. Militia boots
+        # start at the knee; everyone else changes at the ankle taper.
+        b.set_material('Legs')
+        thigh=[(f'{s}UpLeg',f'{s}Leg',0.00,0.108*limb),
+               (f'{s}UpLeg',f'{s}Leg',0.28,0.098*limb),
+               (f'{s}UpLeg',f'{s}Leg',0.70,0.080*limb),
+               (f'{s}UpLeg',f'{s}Leg',1.00,0.069*limb)]
+        if not boots:
+            thigh += [(f'{s}Leg',f'{s}Foot',0.18,0.076*limb),
+                      (f'{s}Leg',f'{s}Foot',0.55,0.061*limb)]
+        lr=b.chain(thigh)
         b.cap(lr[0], tuple(np.array(J[f'{s}UpLeg'])+np.array([0,0.05,0])), [(f'{s}UpLeg',1.0)])
+        b.set_material('Shoes')
+        if boots:
+            low=b.chain([(f'{s}UpLeg',f'{s}Leg',1.00,0.072*limb),
+                         (f'{s}Leg',f'{s}Foot',0.18,0.078),
+                         (f'{s}Leg',f'{s}Foot',0.55,0.066),
+                         (f'{s}Leg',f'{s}Foot',1.00,0.058)])
+        else:
+            low=b.chain([(f'{s}Leg',f'{s}Foot',0.55,0.062*limb),
+                         (f'{s}Leg',f'{s}Foot',1.00,0.044*limb)])
         fp=np.array(J[f'{s}Foot'])
         k = 1.10 if boots else 1.0
         s1=b.sect(fp[0],fp[1]-0.012,0.010,0.049*k,0.052*k,2.6,[(f'{s}Foot',1.0)])
         s2=b.sect(fp[0],fp[1]-0.048,0.045,0.052*k,0.088*k,3.0,[(f'{s}Foot',1.0)])
         s3=b.sect(fp[0],fp[1]-0.058,0.105,0.046*k,0.058*k,3.0,[(f'{s}Foot',1.0)])
-        b.stitch(lr[-1],s1); b.stitch(s1,s2); b.stitch(s2,s3)
+        b.stitch(low[-1],s1); b.stitch(s1,s2); b.stitch(s2,s3)
         b.cap(s3,(fp[0],fp[1]-0.060,0.140),[(f'{s}Foot',1.0)])
         b.cap(s2,(fp[0],fp[1]-0.062,0.045),[(f'{s}Foot',1.0)],flip=True)
 
-    # -- head (shared across archetypes; identity comes from hats and build)
+    # -- head (skin; identity above the collar comes from hair and hats)
     HC = J['Head'][1] + 0.082
     HW = [('Head',1.0)]
+    b.set_material('Skin')
     HEAD = [
         (HC+0.118, 0.040, 0.046,-0.004),
         (HC+0.100, 0.070, 0.079,-0.006),
@@ -318,51 +356,92 @@ def build_body(m):
                (sx*0.086,HC+0.016, 0.020),(sx*0.098,HC+0.016, 0.020),
                (sx*0.098,HC-0.028, 0.022),(sx*0.086,HC-0.028, 0.022)], HW)
 
+    # -- hair: a cap slightly proud of the skull, pulled back so the face
+    # stays clear; 'ring' leaves the crown bald.
+    if m.get('hair') == 'full':
+        b.set_material('Hair')
+        b.loft([(HC+0.130, 0.055, 0.060,-0.010),
+                (HC+0.108, 0.078, 0.086,-0.012),
+                (HC+0.070, 0.092, 0.100,-0.014),
+                (HC+0.030, 0.096, 0.104,-0.018),
+                (HC-0.010, 0.094, 0.100,-0.026),
+                (HC-0.048, 0.086, 0.090,-0.034)],
+               bw=lambda p: HW, n=2.3, capBot=True, capTop=True)
+    elif m.get('hair') == 'ring':
+        b.set_material('Hair')
+        b.loft([(HC-0.058, 0.088, 0.092,-0.024),
+                (HC-0.012, 0.096, 0.102,-0.016),
+                (HC+0.022, 0.094, 0.100,-0.012)],
+               bw=lambda p: HW, n=2.3, capBot=False, capTop=False)
+
     return b.finish()
 
 # ------------------------------------------------------------- attachments
-# Small rigid meshes parented to a bone node. Positions are bone-local.
-def att_peaked_cap():
-    b = MeshBuilder(skinned=False)
-    r1=b.sect(0,0.148,0,0.118,0.118,2.0); r2=b.sect(0,0.223,0,0.108,0.108,2.0)
-    b.stitch(r1,r2); b.cap(r2,(0,0.223,0),None); b.cap(r1,(0,0.148,0),None,flip=True)
-    b.box_at(0,0.152,0.115, 0.1125,0.014,0.05)
-    return ('Head', 'Trim', b.finish())
+# Small rigid meshes parented to a bone node; each part carries its own
+# material. Positions are bone-local. Returns [(bone, material, geom), ...].
+def att_peaked_cap(m):
+    crown = MeshBuilder(skinned=False)
+    r1=crown.sect(0,0.158,0,0.118,0.118,2.0); r2=crown.sect(0,0.226,0,0.106,0.106,2.0)
+    crown.stitch(r1,r2); crown.cap(r2,(0,0.226,0))
+    band = MeshBuilder(skinned=False)
+    b1=band.sect(0,0.136,0,0.1205,0.1205,2.0); b2=band.sect(0,0.158,0,0.1185,0.1185,2.0)
+    band.stitch(b1,b2)
+    brim = MeshBuilder(skinned=False)
+    brim.box_at(0,0.146,0.115, 0.1125,0.012,0.050)
+    return [('Head','MilitiaCloth',crown.finish()),
+            ('Head','State',band.finish()),
+            ('Head','Trim',brim.finish())]
 
-def att_flat_cap():
-    b = MeshBuilder(skinned=False)
+def att_flat_cap(m):
+    b = MeshBuilder(skinned=False, material='CapCloth')
     r1=b.sect(0,0.174,0.008,0.118,0.120,2.2); r2=b.sect(0,0.206,0.002,0.086,0.090,2.2)
-    b.stitch(r1,r2); b.cap(r2,(0,0.206,0.002),None); b.cap(r1,(0,0.174,0.008),None,flip=True)
+    b.stitch(r1,r2); b.cap(r2,(0,0.206,0.002)); b.cap(r1,(0,0.174,0.008),flip=True)
     b.box_at(0,0.176,0.112, 0.075,0.009,0.030)
-    return ('Head', 'Trim', b.finish())
+    return [('Head','CapCloth',b.finish())]
 
-def att_headscarf():
-    b = MeshBuilder(skinned=False)
+def att_headscarf(m):
+    b = MeshBuilder(skinned=False, material='Scarf')
     r1=b.sect(0,0.040,0.004,0.126,0.128,2.2); r2=b.sect(0,0.150,-0.010,0.098,0.104,2.2)
     r3=b.sect(0,0.210,-0.012,0.040,0.044,2.0)
-    b.stitch(r1,r2); b.stitch(r2,r3); b.cap(r3,(0,0.218,-0.012),None)
+    b.stitch(r1,r2); b.stitch(r2,r3); b.cap(r3,(0,0.218,-0.012))
     b.box_at(0,-0.010,-0.085, 0.030,0.055,0.018)   # knot / tail at the nape
-    return ('Head', 'Scarf', b.finish())
+    return [('Head','Scarf',b.finish())]
 
-def att_collar_tab():
-    b = MeshBuilder(skinned=False)
-    b.box_at(0,0.055,0.128, 0.0775,0.021,0.010)
-    return ('Spine2', 'State', b.finish())
+def att_collar_tab(m):
+    b = MeshBuilder(skinned=False, material='State')
+    b.box_at(-0.048,0.055,0.126, 0.034,0.021,0.010)
+    b.box_at( 0.048,0.055,0.126, 0.034,0.021,0.010)
+    return [('Spine2','State',b.finish())]
 
 def att_belt(m):
-    b = MeshBuilder(skinned=False)
+    b = MeshBuilder(skinned=False, material='Trim')
     r = 0.205*m['weight']*max(1.0, m['coatFlare']*0.92)
     r1=b.sect(0,-0.010,0.002,r,r*0.76,2.4); r2=b.sect(0,0.040,0.002,r*0.985,r*0.76*0.985,2.4)
     b.stitch(r1,r2)
     b.box_at(0,0.015,r*0.76+0.006, 0.030,0.020,0.008)  # buckle
-    return ('Spine', 'Trim', b.finish())
+    return [('Spine','Trim',b.finish())]
+
+def att_cane(m):
+    b = MeshBuilder(skinned=False, material='Trim')
+    r1=b.sect(0,-0.020,0.010,0.015,0.015,2.0); r2=b.sect(0,-0.800,0.055,0.011,0.011,2.0)
+    b.stitch(r1,r2); b.cap(r1,(0,-0.014,0.010)); b.cap(r2,(0,-0.804,0.055),flip=True)
+    b.box_at(0,-0.016,0.036, 0.012,0.012,0.036)   # short crook forward
+    return [('RightHand','Trim',b.finish())]
+
+def att_handbag(m):
+    b = MeshBuilder(skinned=False, material='Trim')
+    b.box_at(0,-0.175,0.012, 0.078,0.062,0.030)
+    b.box_at(0,-0.118,0.012, 0.046,0.020,0.007)   # handle up to the fist
+    return [('LeftHand','Trim',b.finish())]
 
 ATTACHMENTS = {
-    'peaked_cap': lambda m: att_peaked_cap(),
-    'flat_cap':   lambda m: att_flat_cap(),
-    'headscarf':  lambda m: att_headscarf(),
-    'collar_tab': lambda m: att_collar_tab(),
-    'belt':       lambda m: att_belt(m),
+    'peaked_cap': att_peaked_cap,
+    'flat_cap':   att_flat_cap,
+    'headscarf':  att_headscarf,
+    'collar_tab': att_collar_tab,
+    'belt':       att_belt,
+    'cane':       att_cane,
+    'handbag':    att_handbag,
 }
 
 # --------------------------------------------------------------- animation
@@ -486,13 +565,17 @@ def build_clips(spec):
     return clips, speeds
 
 # ------------------------------------------------------------------ export
-MATERIALS = {
-    'Body':  None,          # per-archetype coat colour, filled at export
-    'Trim':  (0x35/255, 0x30/255, 0x1f/255),
-    'State': (0xc0/255, 0x20/255, 0x1f/255),
-    # Sage, not rust: under the pre-warmed lights a rust scarf saturates to
-    # orange, which crowds red — and red is reserved for state authority.
-    'Scarf': (0x77/255, 0x78/255, 0x5f/255),
+# Fixed part colours, all from the established palette / prototype coat set.
+FIXED_COLOURS = {
+    'Skin':         '#b4a88e',   # bone — reads cream under the warm lights
+    'Legs':         '#46423a',   # road — trousers
+    'Shoes':        '#35301f',   # trim — shoes and boots
+    'Trim':         '#35301f',
+    'CapCloth':     '#746a55',
+    'MilitiaCloth': '#585c50',
+    'State':        '#c0201f',   # red is the state's alone
+    'Scarf':        '#77785f',   # sage — rust saturated toward red territory
+    'Outline':      '#231d15',   # swapped for BackSide ink by the runtime
 }
 
 def hex_to_rgb(s):
@@ -522,26 +605,47 @@ def export_glb(path, name, spec, body, attachments, clips, speeds):
         accs.append(acc)
         return len(accs)-1
 
-    mat_names = ['Body','Trim','State','Scarf']
-    materials = []
+    mat_names = ['Body','Hair'] + list(FIXED_COLOURS.keys())
+    materials, MI = [], {}
     for mn in mat_names:
-        rgb = hex_to_rgb(spec['coats'][0]) if mn=='Body' else MATERIALS[mn]
+        if mn == 'Body': rgb = hex_to_rgb(spec['coats'][0])
+        elif mn == 'Hair': rgb = hex_to_rgb(spec['mesh'].get('hairColor') or '#35301f')
+        else: rgb = hex_to_rgb(FIXED_COLOURS[mn])
+        MI[mn] = len(materials)
         materials.append(Material(name=mn, pbrMetallicRoughness=PbrMetallicRoughness(
             baseColorFactor=[rgb[0],rgb[1],rgb[2],1.0], metallicFactor=0.0, roughnessFactor=1.0)))
-    MI = {mn:i for i,mn in enumerate(mat_names)}
 
-    def push_mesh(g, material, skinned):
+    def push_body_mesh(g):
         a_pos = push(g['position'], np.float32, FLOAT, 'VEC3', ARRAY_BUF, minmax=True)
         a_nrm = push(g['normal'],   np.float32, FLOAT, 'VEC3', ARRAY_BUF)
-        a_idx = push(g['index'],    np.uint16,  U16,   'SCALAR', ELEM_BUF)
-        attrs = {'POSITION':a_pos,'NORMAL':a_nrm}
-        if skinned:
-            attrs['JOINTS_0'] = push(g['skinIndex'], np.uint16, U16, 'VEC4', ARRAY_BUF)
-            attrs['WEIGHTS_0'] = push(g['skinWeight'], np.float32, FLOAT, 'VEC4', ARRAY_BUF)
-        return Mesh(primitives=[Primitive(attributes=Attributes(**attrs),
-                                          indices=a_idx, mode=4, material=MI[material])])
+        a_jnt = push(g['skinIndex'], np.uint16, U16, 'VEC4', ARRAY_BUF)
+        a_wgt = push(g['skinWeight'], np.float32, FLOAT, 'VEC4', ARRAY_BUF)
+        prims = []
+        for mat, idx in g['groups'].items():
+            a_idx = push(idx, np.uint16, U16, 'SCALAR', ELEM_BUF)
+            prims.append(Primitive(attributes=Attributes(POSITION=a_pos, NORMAL=a_nrm,
+                                                         JOINTS_0=a_jnt, WEIGHTS_0=a_wgt),
+                                   indices=a_idx, mode=4, material=MI[mat]))
+        # Baked outline shell: same skin, positions pushed along normals,
+        # one primitive over every body triangle.
+        shell_pos = g['position'] + g['normal']*OUTLINE_THICKNESS
+        a_shell = push(shell_pos, np.float32, FLOAT, 'VEC3', ARRAY_BUF, minmax=True)
+        all_idx = np.concatenate([idx for idx in g['groups'].values()])
+        a_all = push(all_idx, np.uint16, U16, 'SCALAR', ELEM_BUF)
+        prims.append(Primitive(attributes=Attributes(POSITION=a_shell, NORMAL=a_nrm,
+                                                     JOINTS_0=a_jnt, WEIGHTS_0=a_wgt),
+                               indices=a_all, mode=4, material=MI['Outline']))
+        return Mesh(primitives=prims)
 
-    meshes = [push_mesh(body, 'Body', True)]
+    def push_att_mesh(g, mat):
+        a_pos = push(g['position'], np.float32, FLOAT, 'VEC3', ARRAY_BUF, minmax=True)
+        a_nrm = push(g['normal'],   np.float32, FLOAT, 'VEC3', ARRAY_BUF)
+        idx = np.concatenate([i for i in g['groups'].values()])
+        a_idx = push(idx, np.uint16, U16, 'SCALAR', ELEM_BUF)
+        return Mesh(primitives=[Primitive(attributes=Attributes(POSITION=a_pos, NORMAL=a_nrm),
+                                          indices=a_idx, mode=4, material=MI[mat])])
+
+    meshes = [push_body_mesh(body)]
 
     ibm = []
     for bname in BONES:
@@ -565,10 +669,10 @@ def export_glb(path, name, spec, body, attachments, clips, speeds):
     mesh_node = len(nodes)
     nodes.append(Node(name='Body', mesh=0, skin=0))
 
-    for (bone, material, g) in attachments:
-        meshes.append(push_mesh(g, material, False))
+    for (bone, mat, g) in attachments:
+        meshes.append(push_att_mesh(g, mat))
         ni = len(nodes)
-        nodes.append(Node(name=f'att_{material}_{ni}', mesh=len(meshes)-1))
+        nodes.append(Node(name=f'att_{mat}_{ni}', mesh=len(meshes)-1))
         nodes[BIDX[bone]].children.append(ni)
 
     anims = []
@@ -618,15 +722,19 @@ def main():
     for name, spec in ARCHETYPES.items():
         if name.startswith('_'): continue
         body = build_body(spec['mesh'])
-        atts = [ATTACHMENTS[a](spec['mesh']) for a in spec['mesh']['attachments']]
+        atts = []
+        for a in spec['mesh']['attachments']:
+            atts.extend(ATTACHMENTS[a](spec['mesh']))
         clips, speeds = build_clips(spec)
         verify_knees(clips, name)
         path = os.path.join(OUT_DIR, f'{name}.glb')
         size = export_glb(path, name, spec, body, atts, clips, speeds)
-        tris = len(body['index'])//3 + sum(len(g['index'])//3 for _,_,g in atts)
+        tris = sum(len(i)//3 for i in body['groups'].values())
+        tris += sum(len(i)//3 for _,_,g in atts for i in g['groups'].values())
         total += size
+        parts = ','.join(sorted(body['groups'].keys()))
         print(f'{name:14s} tris={tris:5d} walk={speeds["walk"]:.3f} m/s '
-              f'buffer={size//1024}KB -> {os.path.relpath(path, ROOT)}')
+              f'buffer={size//1024}KB parts=[{parts}]')
     print(f'total buffers {total//1024}KB')
 
 if __name__ == '__main__':

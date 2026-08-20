@@ -8,7 +8,6 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneWithSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import archetypesJson from '../data/archetypes.json';
 import { toonify, toonMaterial } from '../render/toonify';
-import { addOutlineShell } from '../render/outline';
 import { Locomotion } from './locomotion';
 
 interface ArchetypeSpec {
@@ -41,11 +40,6 @@ export function loadArchetype(name: string): Promise<ArchetypeAsset> {
       .then((gltf) => {
         const template = gltf.scene;
         toonify(template);
-        template.traverse((o) => {
-          if ((o as THREE.SkinnedMesh).isSkinnedMesh && o.name === 'Body') {
-            addOutlineShell(o as THREE.SkinnedMesh);
-          }
-        });
         const extras = (gltf.parser.json as { extras?: { naturalSpeeds?: Record<string, number> } })
           .extras;
         return {
@@ -69,8 +63,8 @@ export class Actor {
     const root = cloneWithSkeleton(asset.template);
     const coat = options.coat ?? asset.coats[0] ?? '#ffffff';
     root.traverse((o) => {
-      if ((o as THREE.SkinnedMesh).isSkinnedMesh && o.name === 'Body') {
-        (o as THREE.SkinnedMesh).material = toonMaterial(coat);
+      if ((o as THREE.Mesh).isMesh && o.userData.sourcePart === 'Body') {
+        (o as THREE.Mesh).material = toonMaterial(coat);
       }
     });
     // Group scale scales about the feet, so this is genuine height variation.
