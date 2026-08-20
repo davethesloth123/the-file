@@ -1,0 +1,53 @@
+# Builds every pushed branch and publishes it to GitHub Pages.
+#
+# This is the only way the game can be reviewed — there is no local machine —
+# so if this workflow is red, the branch is unreviewable and fixing it takes
+# priority over feature work (see CLAUDE.md).
+#
+# One-time repo settings this depends on:
+#   1. Settings → Pages → Source: "GitHub Actions"
+#   2. Settings → Environments → github-pages → Deployment branches:
+#      allow all branches (or add claude/*), so preview branches may deploy.
+#
+# Pages serves one deployment per repo, so the most recent push to ANY branch
+# owns the preview URL: https://<owner>.github.io/the-file/
+
+name: preview
+
+on:
+  push:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Later pushes supersede queued deploys; never cancel one mid-flight.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
