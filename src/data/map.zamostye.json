@@ -1,0 +1,60 @@
+{
+  "_comment": "Zamostye district. Layout follows the prototype city (behavioural reference); the avenue runs north-south (+Z north), 1 unit = 1 metre. Buildings are assembled from the facade kit at load by src/world/level.ts — size is [width, depth], floors drive height, style names a material in materials.json, seed drives per-building variation. Colliders are derived from buildings plus the explicit list.",
+  "ground": { "size": [440, 440], "material": "asphalt" },
+  "pavements": [
+    { "pos": [0, 0], "size": [26, 210] },
+    { "pos": [0, 0], "size": [210, 24] }
+  ],
+  "buildings": [
+    { "id": "b1",  "pos": [-30, -58], "size": [20, 22], "floors": 5, "style": "stucco_ochre",   "seed": 101 },
+    { "id": "b2",  "pos": [-30, -30], "size": [20, 26], "floors": 6, "style": "render_sage",    "seed": 102 },
+    { "id": "b3",  "pos": [-32, 26],  "size": [24, 26], "floors": 4, "style": "render_bone",    "seed": 103 },
+    { "id": "b4",  "pos": [-30, 58],  "size": [20, 22], "floors": 5, "style": "stucco_ochre",   "seed": 104 },
+    { "id": "b5",  "pos": [30, -56],  "size": [20, 24], "floors": 6, "style": "render_sage",    "seed": 105 },
+    { "id": "b6",  "pos": [32, -26],  "size": [24, 22], "floors": 4, "style": "brick_rust",     "seed": 106 },
+    { "id": "b7",  "pos": [30, 28],   "size": [20, 26], "floors": 6, "style": "stucco_ochre",   "seed": 107 },
+    { "id": "b8",  "pos": [30, 62],   "size": [20, 20], "floors": 5, "style": "render_bone",    "seed": 108 },
+    { "id": "b9",  "pos": [-64, -20], "size": [22, 30], "floors": 4, "style": "render_bone",    "seed": 109 },
+    { "id": "b10", "pos": [-66, 36],  "size": [20, 22], "floors": 4, "style": "brick_rust",     "seed": 110 },
+    { "id": "b11", "pos": [64, -30],  "size": [22, 28], "floors": 5, "style": "stucco_ochre",   "seed": 111 },
+    { "id": "b12", "pos": [64, 30],   "size": [22, 30], "floors": 4, "style": "render_sage",    "seed": 112 },
+    { "id": "station", "pos": [50, 4],  "size": [16, 18], "floors": 3, "style": "concrete_stone", "seed": 113, "stateLintel": true },
+    { "id": "records", "pos": [-58, 58], "size": [18, 16], "floors": 3, "style": "render_bone",  "seed": 114 }
+  ],
+  "plaza": { "pos": [0, -88], "r": 19, "material": "stone_plaza" },
+  "monument": { "pos": [0, -88], "plinth": [5, 7, 5], "banner": [3.4, 5.2, 0.14] },
+  "tram": { "x": 0, "railGap": 3.0, "from": -104, "to": 104, "wireHeight": 5.6 },
+  "lamps": { "xs": [-13.4, 13.4], "from": -76, "to": 76, "step": 19 },
+  "trees": [
+    [-16.5, -70], [-16.5, -44], [-16.5, -8], [-16.5, 14], [-16.5, 44], [-16.5, 72],
+    [16.5, -66], [16.5, -40], [16.5, -12], [16.5, 12], [16.5, 40], [16.5, 70],
+    [-14, -101], [14, -101], [-24, 84], [24, 84]
+  ],
+  "benches": [
+    { "pos": [-14.6, -20], "yawDeg": 90 }, { "pos": [14.6, 24], "yawDeg": -90 },
+    { "pos": [-14.6, 34], "yawDeg": 90 }, { "pos": [14.6, -48], "yawDeg": -90 },
+    { "pos": [-8, -72], "yawDeg": 150 }, { "pos": [8, -72], "yawDeg": -150 }
+  ],
+  "kiosks": [
+    { "pos": [-16.5, 62], "yawDeg": 90 }, { "pos": [16.8, -62], "yawDeg": -90 },
+    { "pos": [-17, -30], "yawDeg": 90 }
+  ],
+  "bins": [ [-13.8, -34], [13.8, -18], [-13.8, 48], [13.8, 58], [-6, -70], [6, -70] ],
+  "boards": [ { "pos": [-14.2, 6], "yawDeg": 90 }, { "pos": [14.2, -6], "yawDeg": -90 } ],
+  "colliders": [
+    { "type": "box", "pos": [0, -88], "size": [5, 5] }
+  ],
+  "districts": [
+    { "id": "zamostye", "legitimate": true, "poly": [[-80, -104], [80, -104], [80, 104], [-80, 104]] }
+  ],
+  "restricted": [
+    { "id": "station_steps", "pos": [50, -8], "r": 7.5, "label": "the station steps" }
+  ],
+  "waypoints": {
+    "avenue_n": [-9, 52], "avenue_s": [-9, -62],
+    "cross_w": [-40, 6], "cross_e": [46, -6]
+  },
+  "spawns": {
+    "player": [0, 62], "grigori": [-55, 66], "vera": [-47, -33], "clerk": [-58, 47]
+  }
+}
