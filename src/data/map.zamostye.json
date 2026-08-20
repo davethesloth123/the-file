@@ -65,7 +65,8 @@
       ],
       "floors": 6,
       "style": "render_sage",
-      "seed": 102
+      "seed": 102,
+      "open": "flats"
     },
     {
       "id": "b3",
@@ -266,7 +267,8 @@
       "floors": 3,
       "style": "render_bone",
       "seed": 114,
-      "yawDeg": 2
+      "yawDeg": 0,
+      "open": "office"
     },
     {
       "id": "boiler",
@@ -281,8 +283,9 @@
       "floors": 2,
       "style": "brick_rust",
       "seed": 115,
-      "yawDeg": -5,
-      "chimney": true
+      "yawDeg": 0,
+      "chimney": true,
+      "open": "works"
     }
   ],
   "garages": [
@@ -922,5 +925,119 @@
       -58,
       47
     ]
-  }
+  },
+  "phoneBooths": [
+    {
+      "pos": [
+        15.6,
+        44
+      ],
+      "yawDeg": -90
+    },
+    {
+      "pos": [
+        -15.6,
+        -56
+      ],
+      "yawDeg": 90
+    }
+  ],
+  "postBoxes": [
+    [
+      -14.2,
+      14
+    ],
+    [
+      13.9,
+      -28
+    ]
+  ],
+  "pumps": [
+    [
+      -22,
+      52
+    ]
+  ],
+  "washing": [
+    {
+      "from": [
+        -25,
+        49
+      ],
+      "to": [
+        -19,
+        49
+      ]
+    },
+    {
+      "from": [
+        45,
+        47
+      ],
+      "to": [
+        51,
+        47
+      ]
+    }
+  ],
+  "roadDashes": [
+    {
+      "from": [
+        17.5,
+        -100
+      ],
+      "to": [
+        17.5,
+        100
+      ]
+    },
+    {
+      "from": [
+        -17.5,
+        -100
+      ],
+      "to": [
+        -17.5,
+        100
+      ]
+    },
+    {
+      "from": [
+        -100,
+        15.5
+      ],
+      "to": [
+        100,
+        15.5
+      ]
+    },
+    {
+      "from": [
+        -100,
+        -15.5
+      ],
+      "to": [
+        100,
+        -15.5
+      ]
+    }
+  ],
+  "crossings": [
+    {
+      "pos": [
+        17.6,
+        8
+      ],
+      "len": 8.5,
+      "across": "x"
+    },
+    {
+      "pos": [
+        -17.6,
+        -8
+      ],
+      "len": 8.5,
+      "across": "x"
+    }
+  ]
 }

@@ -1,23 +1,29 @@
-// Session 3 check scene: Zamostye assembled from map.zamostye.json, with
-// the cast walking prototype street routes through it. Review helpers:
-//   ?grade=off        ungraded
-//   ?lineup           labelled archetype lineup on plain ground
+// Playable Zamostye: WASD walks Andrei through the district (Shift to
+// hurry), trailing camera per bible §10 (V cycles presets, drag to look),
+// three buildings can be entered and climbed. Ambient cast walks the
+// streets. Review helpers:
+//   ?grade=off            ungraded
+//   ?lineup               labelled archetype lineup on plain ground
 //   ?cam=x,y,z,tx,ty,tz   fixed camera pose (screenshots)
-//   C                 free-fly inspection camera (WASD + drag, Shift fast)
-// Positions advance in the fixed-step sim; rendering interpolates.
+//   C                     free-fly inspection camera
+// Simulation advances at a fixed 60Hz; rendering interpolates.
 import * as THREE from 'three';
 import { FixedClock } from './core/clock';
 import { createRenderer } from './render/renderer';
 import { GradePass } from './render/grade';
 import { FreeCam } from './render/freecam';
+import { TrailingCamera } from './render/camera';
 import { worldMaterial } from './render/worldmat';
 import { createBench } from './ui/bench';
 import { Actor, loadArchetype } from './actors/actor';
+import { PlayerState } from './actors/player';
 import { buildLevel } from './world/level';
+import { CollisionWorld } from './world/collision';
 
 const QUERY = new URLSearchParams(location.search);
 const GRADE_OFF = QUERY.get('grade') === 'off';
 const LINEUP = QUERY.has('lineup');
+const CAM_PIN = QUERY.get('cam');
 
 const renderer = createRenderer();
 document.body.appendChild(renderer.domElement);
@@ -30,18 +36,13 @@ const camera = new THREE.PerspectiveCamera(56, 1, 0.1, 400);
 if (LINEUP) {
   camera.position.set(0, 1.5, 6.2);
   camera.lookAt(0, 1.0, 0);
-} else {
-  camera.position.set(16, 8, 96);
-  camera.lookAt(0, 2, 42);
 }
-const camParam = QUERY.get('cam');
-if (camParam) {
-  const [x, y, z, tx, ty, tz] = camParam.split(',').map(Number);
+if (CAM_PIN) {
+  const [x, y, z, tx, ty, tz] = CAM_PIN.split(',').map(Number);
   camera.position.set(x ?? 0, y ?? 5, z ?? 10);
   camera.lookAt(tx ?? 0, ty ?? 1, tz ?? 0);
 }
 
-// Bible §8 intensities were authored under pre-r155 legacy lighting (π-scaled).
 const LEGACY_LIGHT_SCALE = Math.PI;
 const sun = new THREE.DirectionalLight(0xffeec4, 1.2 * LEGACY_LIGHT_SCALE);
 sun.position.set(60, 90, 40);
@@ -69,6 +70,12 @@ function resize(): void {
 }
 addEventListener('resize', resize);
 resize();
+
+// --------------------------------------------------------------- input
+const keys = new Set<string>();
+addEventListener('keydown', (e) => keys.add(e.key.toLowerCase()));
+addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+const held = (k: string): number => (keys.has(k) ? 1 : 0);
 
 // ------------------------------------------------------------- walkers
 type Route = [number, number][];
@@ -135,10 +142,6 @@ function updateLineupLabels(): void {
   }
 }
 
-// City cast on prototype street routes: militia on their beats, civilians
-// ping-ponging the avenue and cross street. Speeds are the archetypes'
-// natural walks (one civilian pushed off-natural to keep testing the
-// stride lock). Demo-scene inputs, not tuning.
 const PATROL_A: Route = [[-9, -62], [-9, -14], [9, -14], [9, -62]];
 const PATROL_B: Route = [[9, 52], [9, 6], [-9, 6], [-9, 52]];
 const CITY_CAST: [archetype: string, route: Route, startIndex: number, speed: number | null, height: number, coatIndex: number][] = [
@@ -149,7 +152,6 @@ const CITY_CAST: [archetype: string, route: Route, startIndex: number, speed: nu
   ['civilian_f',   [[-40, 6], [-11, 6]],    0, null, 0.98, 0],
   ['civilian_f',   [[11, 30], [11, -34]],   1, null, 1.02, 2],
   ['civilian_old', [[-11, -20], [-11, 44]], 0, null, 1.0,  1],
-  ['player',       [[11, -6], [46, -6]],    0, null, 1.0,  0],
 ];
 
 async function spawnCityCast(): Promise<void> {
@@ -170,16 +172,9 @@ async function spawnCityCast(): Promise<void> {
   }
 }
 
-if (LINEUP) {
-  void spawnLineup();
-} else {
-  buildLevel(scene);
-  void spawnCityCast();
-}
-
 function stepWalkers(dt: number): void {
-  if (LINEUP) return;
   for (const w of walkers) {
+    if (!w.route.length) continue;
     w.px = w.x; w.pz = w.z; w.pyaw = w.yaw;
     const [tx, tz] = w.route[w.target]!;
     const dx = tx - w.x, dz = tz - w.z;
@@ -195,6 +190,37 @@ function stepWalkers(dt: number): void {
     w.yaw += turn * Math.min(1, dt * 10);
   }
 }
+
+// -------------------------------------------------------------- player
+let world = new CollisionWorld([], []);
+let player: PlayerState | null = null;
+let playerActor: Actor | null = null;
+const trailing = new TrailingCamera(camera, renderer.domElement);
+
+async function startPlay(): Promise<void> {
+  const level = buildLevel(scene);
+  world = new CollisionWorld(level.walls, level.surfaces);
+  // ?pos=x,z[,y] — dev spawn override for testing interiors
+  const posParam = QUERY.get('pos');
+  let spawn = level.spawns['player'] ?? ([0, 0] as [number, number]);
+  let spawnY = 0;
+  if (posParam) {
+    const [x, z, y] = posParam.split(',').map(Number);
+    spawn = [x ?? 0, z ?? 0];
+    spawnY = y ?? 0;
+  }
+  player = new PlayerState(spawn);
+  player.y = player.py = spawnY;
+  (window as unknown as { __player?: PlayerState }).__player = player;
+  (window as unknown as { __world?: CollisionWorld }).__world = world;
+  const asset = await loadArchetype('player');
+  playerActor = new Actor(asset, { coat: asset.coats[0]! });
+  scene.add(playerActor.group);
+  void spawnCityCast();
+}
+
+if (LINEUP) void spawnLineup();
+else void startPlay();
 
 const freecam = new FreeCam(camera, renderer.domElement);
 addEventListener('keydown', (e) => {
@@ -212,15 +238,44 @@ renderer.setAnimationLoop((nowMs: number) => {
   const frameDt = lastFrameMs === null ? 0 : Math.min((nowMs - lastFrameMs) / 1000, 0.25);
   lastFrameMs = nowMs;
 
-  const alpha = clock.tick(nowMs, stepWalkers);
+  const alpha = clock.tick(nowMs, (dt) => {
+    stepWalkers(dt);
+    if (player && !freecam.enabled) {
+      player.step(dt, {
+        forward: held('w') - held('s'),
+        strafe: held('d') - held('a'),
+        hurrying: keys.has('shift'),
+      }, trailing.yaw + Math.PI, world);
+    }
+  });
 
   for (const w of walkers) {
+    if (!w.route.length) continue;
     w.actor.group.position.set(
       w.px + (w.x - w.px) * alpha, 0, w.pz + (w.z - w.pz) * alpha,
     );
     const dyaw = ((w.yaw - w.pyaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
     w.actor.group.rotation.y = w.pyaw + dyaw * alpha;
     w.actor.update(w.speed, frameDt);
+  }
+
+  if (player && playerActor) {
+    const ix = player.px + (player.x - player.px) * alpha;
+    const iy = player.py + (player.y - player.py) * alpha;
+    const iz = player.pz + (player.z - player.pz) * alpha;
+    const dyaw = ((player.yaw - player.pyaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    playerActor.group.position.set(ix, iy, iz);
+    playerActor.group.rotation.y = player.pyaw + dyaw * alpha;
+    playerActor.update(player.moving ? player.speed : 0, frameDt);
+
+    if (!freecam.enabled && !CAM_PIN && !LINEUP) {
+      trailing.update(frameDt, {
+        x: ix, y: iy, z: iz,
+        yaw: player.yaw,
+        forwardHeld: held('w') > 0,
+        jogging: player.hurrying && player.moving,
+      }, world);
+    }
   }
 
   freecam.update(frameDt);
