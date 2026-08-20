@@ -1,0 +1,12 @@
+{
+  "grade": {
+    "uSat": 0.26,
+    "uSepia": 0.92,
+    "uWarm": 1.0,
+    "uContrast": 1.14,
+    "uLift": 0.52,
+    "uVignette": 0.58,
+    "uGrain": 0.055,
+    "uRedKeep": 0.45
+  }
+}
