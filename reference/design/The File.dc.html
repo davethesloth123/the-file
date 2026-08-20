@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: #0e0c09; }
+  a { color: #a8802f; text-decoration: none; }
+  a:hover { color: #c49a3f; }
+  ::selection { background: rgba(156,58,44,0.3); }
+  @keyframes fileBreathe { 0%,100% { opacity: 0.55 } 50% { opacity: 1 } }
+  @keyframes stampIn { 0% { opacity: 0; transform: rotate(-6deg) scale(1.5) } 60% { opacity: 1; transform: rotate(-2.2deg) scale(0.98) } 100% { opacity: 1; transform: rotate(-2.2deg) scale(1) } }
+  @keyframes typedIn { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
+  @keyframes promptPulse { 0%,100% { border-color: rgba(232,224,208,0.45) } 50% { border-color: rgba(232,224,208,0.9) } }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; background: #0e0c09; display: flex; align-items: center; justify-content: center; padding: 0; font-family: Barlow, system-ui, sans-serif;">
+
+  <sc-if value="{{ onTitle }}" hint-placeholder-val="{{ true }}">
+  <div style="position: relative; width: 100vw; height: 100vh; overflow: hidden; background: radial-gradient(120% 100% at 50% 40%, #221d15 0%, #0e0c09 78%); display: flex; align-items: center; justify-content: center;">
+
+    <div style="position: absolute; inset: 0; background-image: repeating-linear-gradient(96deg, rgba(232,224,208,0.028) 0 1px, transparent 1px 7px); pointer-events: none;"></div>
+
+    <div style="position: relative; width: 760px; max-width: 88vw; background: linear-gradient(168deg, #ddd1ba 0%, #d0c3a8 44%, #c3b599 100%); box-shadow: 0 40px 90px -20px rgba(0,0,0,0.85), 0 2px 0 rgba(255,255,255,0.18) inset; padding: 52px 56px 44px;">
+
+      <div style="position: absolute; top: -30px; left: 48px; width: 210px; height: 30px; background: #c3b599; box-shadow: 0 -3px 10px -4px rgba(0,0,0,0.6); display: flex; align-items: center; padding: 0 16px; box-sizing: border-box;">
+        <span style="font-family: 'Courier Prime', monospace; font-size: 11px; letter-spacing: 0.16em; color: #4a4237; text-transform: uppercase;">Отдел 4 · 1978</span>
+      </div>
+
+      <i style="position: absolute; top: 14px; left: 14px; width: 11px; height: 11px; border-left: 1px solid rgba(33,29,23,0.5); border-top: 1px solid rgba(33,29,23,0.5);"></i>
+      <i style="position: absolute; top: 14px; right: 14px; width: 11px; height: 11px; border-right: 1px solid rgba(33,29,23,0.5); border-top: 1px solid rgba(33,29,23,0.5);"></i>
+      <i style="position: absolute; bottom: 14px; left: 14px; width: 11px; height: 11px; border-left: 1px solid rgba(33,29,23,0.5); border-bottom: 1px solid rgba(33,29,23,0.5);"></i>
+      <i style="position: absolute; bottom: 14px; right: 14px; width: 11px; height: 11px; border-right: 1px solid rgba(33,29,23,0.5); border-bottom: 1px solid rgba(33,29,23,0.5);"></i>
+
+      <div style="position: absolute; top: 44px; right: 44px; animation: stampIn 700ms cubic-bezier(0.2,0.9,0.3,1) 300ms both; transform-origin: center;">
+        <div style="border: 2.5px solid rgba(156,58,44,0.72); padding: 7px 14px 6px; display: flex; flex-direction: column; align-items: center; gap: 2px;">
+          <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: 0.2em; color: rgba(156,58,44,0.78); line-height: 1;">СЕКРЕТНО</span>
+          <span style="font-family: 'Courier Prime', monospace; font-size: 8.5px; letter-spacing: 0.24em; color: rgba(156,58,44,0.66);">NO COPIES · NO REMOVAL</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 34px;">
+        <span style="font-family: 'Courier Prime', monospace; font-size: 11px; letter-spacing: 0.3em; color: #6b6053; text-transform: uppercase;">Personal file</span>
+        <h1 style="margin: 0; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 108px; line-height: 0.84; letter-spacing: -0.012em; color: #211d17; text-transform: uppercase;">The File</h1>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 500; font-size: 19px; letter-spacing: 0.18em; color: #6b3a2c; text-transform: uppercase;">Moscow · 1978</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 3px 40px; margin-bottom: 36px; font-family: 'Courier Prime', monospace; font-size: 12.5px; color: #3c352b;">
+        <div style="display: flex; gap: 10px; border-bottom: 1px dotted rgba(33,29,23,0.28); padding: 5px 0;"><span style="color: #7a6f60; min-width: 84px;">SUBJECT</span><span>ZOTOV, A. M.</span></div>
+        <div style="display: flex; gap: 10px; border-bottom: 1px dotted rgba(33,29,23,0.28); padding: 5px 0;"><span style="color: #7a6f60; min-width: 84px;">OPENED</span><span>14.II.1971</span></div>
+        <div style="display: flex; gap: 10px; border-bottom: 1px dotted rgba(33,29,23,0.28); padding: 5px 0;"><span style="color: #7a6f60; min-width: 84px;">EMPLOYMENT</span><span>Institute clerk</span></div>
+        <div style="display: flex; gap: 10px; border-bottom: 1px dotted rgba(33,29,23,0.28); padding: 5px 0;"><span style="color: #7a6f60; min-width: 84px;">PAGES</span><span>{{ pageCount }} — and rising</span></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 0; border-top: 1px solid rgba(33,29,23,0.32);">
+        <sc-for list="{{ menu }}" as="item" hint-placeholder-count="4">
+          <button type="button" onClick="{{ item.onSelect }}" onMouseEnter="{{ item.onHover }}" style="all: unset; cursor: pointer; display: grid; grid-template-columns: 22px 1fr auto; align-items: baseline; gap: 14px; padding: 13px 6px; border-bottom: 1px solid rgba(33,29,23,0.18); background: transparent; transition: background 120ms;" style-hover="background: rgba(105,58,44,0.09)" style-focus="outline: 2px solid #9c3a2c; outline-offset: 2px">
+            <span style="font-family: 'Courier Prime', monospace; font-size: 12px; color: #9c3a2c;">{{ item.mark }}</span>
+            <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 26px; letter-spacing: 0.05em; color: #211d17; text-transform: uppercase; line-height: 1;">{{ item.label }}</span>
+            <span style="font-family: 'Courier Prime', monospace; font-size: 10.5px; letter-spacing: 0.1em; color: #7a6f60; text-transform: uppercase;">{{ item.note }}</span>
+          </button>
+        </sc-for>
+      </div>
+
+      <p style="margin: 28px 0 0; font-family: 'Courier Prime', monospace; font-size: 11.5px; line-height: 1.7; color: #6b6053; max-width: 46ch;">No one is hunting you. Everyone is written down. Walking past a patrol is free — only conduct is priced. Nothing you do removes a page; it only moves the cost onto someone with a name.</p>
+    </div>
+
+    <div style="position: absolute; bottom: 26px; left: 0; right: 0; display: flex; justify-content: center; gap: 26px; font-family: 'Courier Prime', monospace; font-size: 10.5px; letter-spacing: 0.2em; color: rgba(232,224,208,0.34); text-transform: uppercase;">
+      <span>↑↓ select</span>
+      <span>enter confirm</span>
+      <span>esc — there is no esc</span>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ inGame }}" hint-placeholder-val="{{ false }}">
+  <div style="position: relative; width: 100vw; height: 100vh; overflow: hidden; background: #0e0c09;">
+
+    <div style="position: absolute; inset: 0; background: linear-gradient(178deg, #2b2317 0%, #3a3020 34%, #4a3d28 62%, #241d13 100%);"></div>
+
+    <div style="position: absolute; left: 0; right: 0; top: 0; height: 34%; background: linear-gradient(180deg, rgba(20,16,10,0.9), rgba(74,61,40,0)); "></div>
+
+    <div style="position: absolute; left: 6%; right: 6%; top: 15%; bottom: 26%; border: 1px solid rgba(232,224,208,0.14);">
+      <div style="position: absolute; left: 0; right: 0; top: 46%; border-top: 1px dashed rgba(232,224,208,0.16);"></div>
+      <div style="position: absolute; top: 0; bottom: 0; left: 12%; border-left: 1px solid rgba(232,224,208,0.13); transform: skewX(-3deg);"></div>
+      <div style="position: absolute; top: 6%; bottom: 4%; left: 30%; border-left: 1px solid rgba(232,224,208,0.11); transform: skewX(-1.6deg);"></div>
+      <div style="position: absolute; top: 12%; bottom: 8%; left: 44%; border-left: 1px solid rgba(232,224,208,0.09);"></div>
+      <div style="position: absolute; inset: 0; background-image: repeating-linear-gradient(108deg, rgba(232,224,208,0.035) 0 1px, transparent 1px 9px);"></div>
+
+      <div style="position: absolute; left: 50%; top: 8%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 7px;">
+        <span style="font-family: 'Courier Prime', monospace; font-size: 11px; letter-spacing: 0.28em; color: rgba(232,224,208,0.5); text-transform: uppercase;">3D render plate</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 27px; letter-spacing: 0.09em; color: rgba(232,224,208,0.72); text-transform: uppercase;">Metro platform · cel-shaded</span>
+        <span style="font-family: 'Courier Prime', monospace; font-size: 10.5px; letter-spacing: 0.1em; color: rgba(232,224,208,0.38);">marble vault · chandeliers · detailed mid-to-high poly · warm stock grade</span>
+      </div>
+
+      <sc-if value="{{ showComposition }}" hint-placeholder-val="{{ true }}">
+      <div style="position: absolute; left: 6%; top: 40%; width: 17%; height: 52%; border: 1px solid rgba(168,128,47,0.5); box-sizing: border-box;" style-hover="border-color: rgba(232,224,208,0.85)">
+        <span style="position: absolute; top: -1px; left: -1px; background: rgba(168,128,47,0.85); color: #17140f; font-family: 'Courier Prime', monospace; font-size: 9.5px; letter-spacing: 0.14em; padding: 2px 6px; text-transform: uppercase; white-space: nowrap;">Player</span>
+        <span style="position: absolute; bottom: 5px; left: 7px; right: 7px; font-family: 'Courier Prime', monospace; font-size: 9.5px; line-height: 1.5; color: rgba(232,224,208,0.55);">over-shoulder, screen-left, mid-stride</span>
+      </div>
+      <div style="position: absolute; left: 31%; top: 44%; width: 10%; height: 34%; border: 1px solid rgba(168,128,47,0.5); box-sizing: border-box;" style-hover="border-color: rgba(232,224,208,0.85)">
+        <span style="position: absolute; top: -1px; left: -1px; background: rgba(168,128,47,0.85); color: #17140f; font-family: 'Courier Prime', monospace; font-size: 9.5px; letter-spacing: 0.14em; padding: 2px 6px; text-transform: uppercase; white-space: nowrap;">Citizen · watching</span>
+        <span style="position: absolute; bottom: 5px; left: 7px; right: 7px; font-family: 'Courier Prime', monospace; font-size: 9.5px; line-height: 1.5; color: rgba(232,224,208,0.55);">clocked you; head does not turn away</span>
+      </div>
+      <div style="position: absolute; left: 44%; top: 46%; width: 13%; height: 26%; border: 1px solid rgba(168,128,47,0.5); box-sizing: border-box;" style-hover="border-color: rgba(232,224,208,0.85)">
+        <span style="position: absolute; top: -1px; left: -1px; background: rgba(168,128,47,0.85); color: #17140f; font-family: 'Courier Prime', monospace; font-size: 9.5px; letter-spacing: 0.14em; padding: 2px 6px; text-transform: uppercase; white-space: nowrap;">Crowd</span>
+        <span style="position: absolute; bottom: 5px; left: 7px; right: 7px; font-family: 'Courier Prime', monospace; font-size: 9.5px; line-height: 1.5; color: rgba(232,224,208,0.55);">9–14 bodies, silhouetted, any of them writes</span>
+      </div>
+      <div style="position: absolute; left: 62%; top: 38%; width: 15%; height: 32%; border: 1px solid rgba(196,82,60,0.62); box-sizing: border-box;" style-hover="border-color: rgba(232,224,208,0.85)">
+        <span style="position: absolute; top: -1px; left: -1px; background: rgba(196,82,60,0.88); color: #17140f; font-family: 'Courier Prime', monospace; font-size: 9.5px; letter-spacing: 0.14em; padding: 2px 6px; text-transform: uppercase; white-space: nowrap;">Dead drop</span>
+        <span style="position: absolute; bottom: 5px; left: 7px; right: 7px; font-family: 'Courier Prime', monospace; font-size: 9.5px; line-height: 1.5; color: rgba(232,224,208,0.55);">loose marble panel — a break in the cel band marks it</span>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="position: absolute; inset: 0; pointer-events: none; background: radial-gradient(88% 78% at 50% 46%, transparent 40%, rgba(14,12,9,0.72) 100%);"></div>
+    <div style="position: absolute; inset: 0; pointer-events: none; mix-blend-mode: soft-light; background: linear-gradient(0deg, rgba(168,128,47,0.22), rgba(120,140,160,0.12));"></div>
+
+    <div style="position: absolute; top: 30px; left: 38px; display: flex; flex-direction: column; gap: 4px;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 40px; line-height: 0.9; letter-spacing: 0.03em; color: #e8e0d0;">{{ clock }}</span>
+        <span style="font-family: 'Courier Prime', monospace; font-size: 11px; letter-spacing: 0.18em; color: rgba(232,224,208,0.5); text-transform: uppercase;">tue 7·xi</span>
+      </div>
+      <span style="font-family: 'Courier Prime', monospace; font-size: 10.5px; letter-spacing: 0.16em; color: rgba(232,224,208,0.38); text-transform: uppercase;">Ploshchad Revolyutsii · northbound</span>
+      <div style="width: 118px; height: 1px; background: rgba(232,224,208,0.28); margin-top: 5px;"></div>
+    </div>
+
+    <div style="position: absolute; top: 30px; right: 38px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+      <span style="font-family: 'Courier Prime', monospace; font-size: 10.5px; letter-spacing: 0.24em; color: rgba(232,224,208,0.5); text-transform: uppercase;">your file</span>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+        <sc-for list="{{ pages }}" as="p" hint-placeholder-count="18">
+          <div style="{{ p.style }}"></div>
+        </sc-for>
+      </div>
+      <div style="display: flex; align-items: baseline; gap: 7px;">
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; color: #e8e0d0; line-height: 1;">{{ pageCount }}</span>
+        <span style="font-family: 'Courier Prime', monospace; font-size: 10px; letter-spacing: 0.16em; color: rgba(232,224,208,0.42); text-transform: uppercase;">pages · 4 open lines</span>
+      </div>
+    </div>
+
+    <div style="position: absolute; bottom: 34px; left: 38px; max-width: 340px; display: flex; flex-direction: column; gap: 7px;">
+      <div style="display: flex; align-items: center; gap: 9px;">
+        <span style="width: 6px; height: 6px; background: #a8802f;"></span>
+        <span style="font-family: 'Courier Prime', monospace; font-size: 10.5px; letter-spacing: 0.24em; color: rgba(232,224,208,0.52); text-transform: uppercase;">errand</span>
+      </div>
+      <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 500; font-size: 25px; line-height: 1.12; letter-spacing: 0.015em; color: #e8e0d0; text-wrap: pretty;">Leave the envelope behind the loose panel. Do not stop walking.</span>
+      <span style="font-family: 'Courier Prime', monospace; font-size: 10.5px; line-height: 1.6; color: rgba(232,224,208,0.42);">Then buy bread on Gorky St. before 19:00. The errand and the ordinary thing are the same trip.</span>
+    </div>
+
+    <sc-if value="{{ showPrompt }}" hint-placeholder-val="{{ true }}">
+    <div style="position: absolute; bottom: 104px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 13px; animation: typedIn 260ms ease both;">
+      <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 17px; color: #e8e0d0; border: 1.5px solid rgba(232,224,208,0.7); padding: 4px 11px; letter-spacing: 0.06em; animation: promptPulse 1.8s ease-in-out infinite;">E</span>
+      <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 500; font-size: 21px; letter-spacing: 0.09em; color: #e8e0d0; text-transform: uppercase;">{{ promptLabel }}</span>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ showWarning }}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); animation: stampIn 520ms cubic-bezier(0.2,0.9,0.3,1) both; transform-origin: center;">
+      <div style="border: 3px solid rgba(156,58,44,0.85); padding: 14px 26px 12px; display: flex; flex-direction: column; align-items: center; gap: 5px; background: rgba(23,20,15,0.42);">
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 30px; letter-spacing: 0.16em; color: #c4523c; line-height: 1; text-transform: uppercase;">Conduct logged</span>
+        <span style="font-family: 'Courier Prime', monospace; font-size: 11px; letter-spacing: 0.14em; color: rgba(196,82,60,0.9); text-transform: uppercase;">loitering near station furniture · +1 page</span>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ showChoice }}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; inset: 0; background: rgba(10,8,6,0.74); display: flex; align-items: center; justify-content: center; animation: typedIn 220ms ease both;">
+      <div style="position: relative; width: 560px; max-width: 84vw; background: #d9cdb6; padding: 38px 40px 34px; box-shadow: 0 30px 70px -18px rgba(0,0,0,0.8);">
+        <i style="position: absolute; top: 12px; left: 12px; width: 10px; height: 10px; border-left: 1px solid rgba(33,29,23,0.5); border-top: 1px solid rgba(33,29,23,0.5);"></i>
+        <i style="position: absolute; top: 12px; right: 12px; width: 10px; height: 10px; border-right: 1px solid rgba(33,29,23,0.5); border-top: 1px solid rgba(33,29,23,0.5);"></i>
+        <i style="position: absolute; bottom: 12px; left: 12px; width: 10px; height: 10px; border-left: 1px solid rgba(33,29,23,0.5); border-bottom: 1px solid rgba(33,29,23,0.5);"></i>
+        <i style="position: absolute; bottom: 12px; right: 12px; width: 10px; height: 10px; border-right: 1px solid rgba(33,29,23,0.5); border-bottom: 1px solid rgba(33,29,23,0.5);"></i>
+
+        <span style="font-family: 'Courier Prime', monospace; font-size: 10.5px; letter-spacing: 0.26em; color: #7a6f60; text-transform: uppercase;">Line 7 · open since 11.IX</span>
+        <h2 style="margin: 8px 0 6px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 40px; line-height: 0.95; letter-spacing: 0.01em; color: #211d17; text-transform: uppercase;">Close this line</h2>
+        <p style="margin: 0 0 26px; font-family: 'Courier Prime', monospace; font-size: 12px; line-height: 1.7; color: #4a4237; max-width: 48ch;">A line closes when the clerk has something better to write. The page stays. Someone else's begins.</p>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <sc-for list="{{ choices }}" as="c" hint-placeholder-count="3">
+            <button type="button" onClick="{{ c.onPick }}" style="all: unset; cursor: pointer; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 18px; padding: 13px 15px; border: 1px solid rgba(33,29,23,0.4); box-sizing: border-box; transition: background 120ms;" style-hover="background: rgba(105,58,44,0.1)" style-focus="outline: 2px solid #9c3a2c; outline-offset: 2px">
+              <span style="display: flex; flex-direction: column; gap: 3px;">
+                <span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 21px; letter-spacing: 0.04em; color: #211d17; text-transform: uppercase; line-height: 1;">{{ c.label }}</span>
+                <span style="font-family: 'Courier Prime', monospace; font-size: 10.5px; color: #6b6053;">{{ c.who }}</span>
+              </span>
+              <span style="font-family: 'Courier Prime', monospace; font-size: 10.5px; letter-spacing: 0.12em; color: #9c3a2c; text-transform: uppercase; white-space: nowrap;">{{ c.cost }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <div style="position: absolute; bottom: 30px; right: 38px; display: flex; align-items: center; gap: 16px;">
+      <span style="font-family: 'Courier Prime', monospace; font-size: 10px; letter-spacing: 0.2em; color: rgba(232,224,208,0.3); text-transform: uppercase;">{{ stepLabel }}</span>
+      <button type="button" onClick="{{ advance }}" style="all: unset; cursor: pointer; font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: 0.14em; color: rgba(232,224,208,0.72); text-transform: uppercase; border: 1px solid rgba(232,224,208,0.34); padding: 7px 15px;" style-hover="color: #e8e0d0; border-color: rgba(232,224,208,0.8)" style-focus="outline: 2px solid #a8802f; outline-offset: 2px">{{ advanceLabel }}</button>
+    </div>
+  </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;fileCapacity&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:26,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:14,&quot;max&quot;:40,&quot;unit&quot;:&quot; pages&quot;,&quot;section&quot;:&quot;File&quot;},&quot;showComposition&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Render plate&quot;}}">
+class Component extends DCLogic {
+  state = { screen: 'title', step: 0, pages: 14 };
+
+  componentDidMount() {
+    this._key = (e) => {
+      if (e.key === 'Enter' && this.state.screen === 'title') this.begin();
+      else if ((e.key === 'e' || e.key === 'E' || e.key === 'Enter') && this.state.screen === 'game') this.advance();
+    };
+    window.addEventListener('keydown', this._key);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this._key); }
+
+  begin = () => this.setState({ screen: 'game', step: 0 });
+  advance = () => this.setState(s => ({ step: Math.min(3, s.step + 1) }));
+  pick = () => this.setState(s => ({ screen: 'title', step: 0, pages: s.pages + 1 }));
+
+  renderVals() {
+    const { screen, step, pages } = this.state;
+    const total = Number(this.props.fileCapacity ?? 26);
+
+    const pageRows = Array.from({ length: total }, (_, i) => ({
+      style: {
+        height: '2px',
+        width: (34 + ((i * 13) % 46)) + 'px',
+        background: i < pages ? 'rgba(232,224,208,0.82)' : 'rgba(232,224,208,0.16)'
+      }
+    }));
+
+    const menu = [
+      { mark: '01', label: 'Begin the day', note: 'tue 7 nov', onSelect: this.begin, onHover: () => {} },
+      { mark: '02', label: 'Read your file', note: pages + ' pages', onSelect: this.begin, onHover: () => {} },
+      { mark: '03', label: 'Names on record', note: '4 open lines', onSelect: this.begin, onHover: () => {} },
+      { mark: '04', label: 'Settings', note: 'audio · keys', onSelect: this.begin, onHover: () => {} }
+    ];
+
+    const choices = [
+      { label: 'Name the neighbour', who: 'Vera P. — lends you her telephone', cost: 'her file opens', onPick: this.pick },
+      { label: 'Name the colleague', who: 'Sasha K. — talks too much already', cost: '2 pages to him', onPick: this.pick },
+      { label: 'Say nothing', who: 'Line 7 stays open', cost: '+1 page to you', onPick: this.pick }
+    ];
+
+    const labels = ['approach', 'prompt', 'conduct logged', 'the price'];
+    const nextLabels = ['Approach the panel', 'Reach behind it', 'Continue', 'Restart walkthrough'];
+
+    return {
+      onTitle: screen === 'title',
+      inGame: screen === 'game',
+      pageCount: pages,
+      showComposition: this.props.showComposition ?? true,
+      pages: pageRows,
+      menu,
+      choices,
+      clock: ['17:42', '17:43', '17:43', '17:44'][step],
+      showPrompt: screen === 'game' && step >= 1 && step < 3,
+      showWarning: screen === 'game' && step === 2,
+      showChoice: screen === 'game' && step === 3,
+      promptLabel: step >= 2 ? 'Walk on' : 'Reach behind the panel',
+      stepLabel: (step + 1) + '/4 · ' + labels[step],
+      advanceLabel: step === 3 ? 'Restart' : nextLabels[step],
+      advance: step === 3 ? this.pick : this.advance
+    };
+  }
+}
+
+</script>
+</body>
+</html>

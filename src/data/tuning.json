@@ -1,0 +1,18 @@
+{
+  "locomotion": {
+    "blendTime": 0.22,
+    "timeScaleClamp": [0.6, 1.75],
+    "idleBelow": 0.2,
+    "jogAbove": 3.5
+  },
+  "grade": {
+    "uSat": 0.26,
+    "uSepia": 0.92,
+    "uWarm": 1.0,
+    "uContrast": 1.14,
+    "uLift": 0.52,
+    "uVignette": 0.58,
+    "uGrain": 0.055,
+    "uRedKeep": 0.45
+  }
+}
