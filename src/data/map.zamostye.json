@@ -1,0 +1,1084 @@
+{
+  "_comment": "Zamostye district. Layout follows the prototype city loosely, roughened so it reads as a grown place: jittered footprints, wings making L-shaped masses, small yaws on the outer blocks (street-front facades stay parallel to the street; only the state's own station sits perfectly square). The avenue is a broad boulevard with the tram down its middle; roads run either side of the kerb. Assembled by src/world/level.ts; 1 unit = 1 metre, +Z north. Colliders derive from buildings/wings/garages/walls plus the explicit list.",
+  "ground": {
+    "size": [
+      440,
+      440
+    ],
+    "material": "asphalt"
+  },
+  "pavements": [
+    {
+      "pos": [
+        0,
+        0
+      ],
+      "size": [
+        26,
+        210
+      ]
+    },
+    {
+      "pos": [
+        -31.6,
+        0
+      ],
+      "size": [
+        146.8,
+        24
+      ]
+    },
+    {
+      "pos": [
+        81.6,
+        0
+      ],
+      "size": [
+        46.8,
+        24
+      ]
+    }
+  ],
+  "buildings": [
+    {
+      "id": "b1",
+      "pos": [
+        -31,
+        -59
+      ],
+      "size": [
+        21,
+        23
+      ],
+      "floors": 5,
+      "style": "stucco_ochre",
+      "seed": 101,
+      "wings": [
+        {
+          "dx": -14,
+          "dz": 5,
+          "w": 8,
+          "d": 13,
+          "floorsDelta": -1
+        }
+      ]
+    },
+    {
+      "id": "b2",
+      "pos": [
+        -29,
+        -31
+      ],
+      "size": [
+        18,
+        24
+      ],
+      "floors": 6,
+      "style": "render_sage",
+      "seed": 102,
+      "open": "flats"
+    },
+    {
+      "id": "b3",
+      "pos": [
+        -33,
+        25
+      ],
+      "size": [
+        26,
+        25
+      ],
+      "floors": 2,
+      "style": "render_bone",
+      "seed": 203,
+      "open": "shops",
+      "units": 3
+    },
+    {
+      "id": "b4",
+      "pos": [
+        -30,
+        59
+      ],
+      "size": [
+        19,
+        21
+      ],
+      "floors": 5,
+      "style": "stucco_ochre",
+      "seed": 104
+    },
+    {
+      "id": "b5",
+      "pos": [
+        31,
+        -57
+      ],
+      "size": [
+        21,
+        25
+      ],
+      "floors": 6,
+      "style": "render_sage",
+      "seed": 105,
+      "wings": [
+        {
+          "dx": 13,
+          "dz": -3,
+          "w": 8,
+          "d": 14,
+          "floorsDelta": -2
+        }
+      ]
+    },
+    {
+      "id": "b6",
+      "pos": [
+        33,
+        -25
+      ],
+      "size": [
+        23,
+        21
+      ],
+      "floors": 4,
+      "style": "brick_rust",
+      "seed": 106,
+      "chamfer": true
+    },
+    {
+      "id": "b7",
+      "pos": [
+        29,
+        29
+      ],
+      "size": [
+        19,
+        27
+      ],
+      "floors": 7,
+      "style": "stucco_ochre",
+      "seed": 107,
+      "open": "flats"
+    },
+    {
+      "id": "b8",
+      "pos": [
+        31,
+        63
+      ],
+      "size": [
+        21,
+        19
+      ],
+      "floors": 4,
+      "style": "render_bone",
+      "seed": 108
+    },
+    {
+      "id": "b9",
+      "pos": [
+        -66,
+        -22
+      ],
+      "size": [
+        21,
+        31
+      ],
+      "floors": 4,
+      "style": "render_bone",
+      "seed": 109,
+      "yawDeg": 7
+    },
+    {
+      "id": "b10",
+      "pos": [
+        -67,
+        38
+      ],
+      "size": [
+        19,
+        23
+      ],
+      "floors": 3,
+      "style": "brick_rust",
+      "seed": 110,
+      "yawDeg": -6,
+      "wings": [
+        {
+          "dx": 9,
+          "dz": 14,
+          "w": 12,
+          "d": 8,
+          "floorsDelta": -1
+        }
+      ]
+    },
+    {
+      "id": "b11",
+      "pos": [
+        65,
+        -32
+      ],
+      "size": [
+        23,
+        27
+      ],
+      "floors": 5,
+      "style": "stucco_ochre",
+      "seed": 111,
+      "yawDeg": -7
+    },
+    {
+      "id": "b12",
+      "pos": [
+        66,
+        32
+      ],
+      "size": [
+        21,
+        29
+      ],
+      "floors": 4,
+      "style": "render_sage",
+      "seed": 112,
+      "yawDeg": 5
+    },
+    {
+      "id": "station",
+      "pos": [
+        50,
+        4
+      ],
+      "size": [
+        16,
+        18
+      ],
+      "floors": 3,
+      "style": "concrete_stone",
+      "seed": 113,
+      "stateLintel": true,
+      "open": "station"
+    },
+    {
+      "id": "records",
+      "pos": [
+        -58,
+        58
+      ],
+      "size": [
+        17,
+        15
+      ],
+      "floors": 3,
+      "style": "render_bone",
+      "seed": 114,
+      "yawDeg": 0,
+      "open": "office"
+    },
+    {
+      "id": "boiler",
+      "pos": [
+        -46,
+        -72
+      ],
+      "size": [
+        12,
+        9
+      ],
+      "floors": 2,
+      "style": "brick_rust",
+      "seed": 115,
+      "yawDeg": 0,
+      "chimney": true,
+      "open": "works"
+    },
+    {
+      "id": "motorpool",
+      "pos": [
+        57,
+        51
+      ],
+      "size": [
+        16,
+        10
+      ],
+      "floors": 1,
+      "style": "brick_rust",
+      "seed": 116,
+      "open": "motorpool"
+    },
+    {
+      "id": "house1",
+      "pos": [
+        -51,
+        19
+      ],
+      "size": [
+        7,
+        8
+      ],
+      "floors": 1,
+      "style": "render_sage",
+      "seed": 117,
+      "kind": "house",
+      "yawDeg": 6
+    },
+    {
+      "id": "house2",
+      "pos": [
+        47,
+        66
+      ],
+      "size": [
+        8,
+        7
+      ],
+      "floors": 2,
+      "style": "stucco_ochre",
+      "seed": 118,
+      "kind": "house",
+      "yawDeg": -8
+    }
+  ],
+  "garages": [
+    {
+      "pos": [
+        -62,
+        -46
+      ],
+      "size": [
+        11,
+        5
+      ],
+      "yawDeg": 86
+    }
+  ],
+  "walls": [
+    {
+      "from": [
+        -20,
+        42
+      ],
+      "to": [
+        -20,
+        50
+      ],
+      "h": 2.2
+    },
+    {
+      "from": [
+        20,
+        -46
+      ],
+      "to": [
+        20,
+        -38
+      ],
+      "h": 2.2
+    },
+    {
+      "from": [
+        -44,
+        12
+      ],
+      "to": [
+        -36,
+        12
+      ],
+      "h": 2.0
+    }
+  ],
+  "cars": [
+    {
+      "pos": [
+        -14.7,
+        -4
+      ],
+      "yawDeg": 182,
+      "color": "#5d5b4c"
+    },
+    {
+      "pos": [
+        14.7,
+        18
+      ],
+      "yawDeg": 1,
+      "color": "#6b6355"
+    },
+    {
+      "pos": [
+        -14.8,
+        32
+      ],
+      "yawDeg": 178,
+      "color": "#8a7d66"
+    },
+    {
+      "pos": [
+        14.6,
+        -42
+      ],
+      "yawDeg": -2,
+      "color": "#413d31"
+    },
+    {
+      "pos": [
+        -34,
+        14.8
+      ],
+      "yawDeg": 91,
+      "color": "#77785f"
+    },
+    {
+      "pos": [
+        40,
+        14.6
+      ],
+      "yawDeg": 269,
+      "color": "#5d5b4c"
+    }
+  ],
+  "plaza": {
+    "pos": [
+      0,
+      -88
+    ],
+    "r": 19,
+    "material": "stone_plaza"
+  },
+  "monument": {
+    "pos": [
+      0,
+      -88
+    ],
+    "plinth": [
+      5,
+      7,
+      5
+    ],
+    "banner": [
+      3.4,
+      5.2,
+      0.14
+    ]
+  },
+  "tram": {
+    "x": 0,
+    "railGap": 3.0,
+    "from": -104,
+    "to": 104,
+    "wireHeight": 5.6
+  },
+  "lamps": {
+    "xs": [
+      -13.4,
+      13.4
+    ],
+    "from": -76,
+    "to": 76,
+    "step": 19
+  },
+  "manholes": [
+    [
+      -4,
+      -22
+    ],
+    [
+      3,
+      12
+    ],
+    [
+      -2,
+      46
+    ],
+    [
+      4,
+      -54
+    ],
+    [
+      16.5,
+      2
+    ],
+    [
+      -16.2,
+      -30
+    ]
+  ],
+  "trees": [
+    [
+      -16.5,
+      -70
+    ],
+    [
+      -16.5,
+      -44
+    ],
+    [
+      -16.5,
+      -8
+    ],
+    [
+      -16.5,
+      14
+    ],
+    [
+      -16.5,
+      44
+    ],
+    [
+      -16.5,
+      72
+    ],
+    [
+      16.5,
+      -66
+    ],
+    [
+      16.5,
+      -40
+    ],
+    [
+      16.5,
+      -12
+    ],
+    [
+      16.5,
+      12
+    ],
+    [
+      16.5,
+      40
+    ],
+    [
+      16.5,
+      70
+    ],
+    [
+      -14,
+      -101
+    ],
+    [
+      14,
+      -101
+    ],
+    [
+      -24,
+      84
+    ],
+    [
+      24,
+      84
+    ],
+    [
+      -44,
+      4
+    ],
+    [
+      -48,
+      20
+    ],
+    [
+      46,
+      -18
+    ],
+    [
+      44,
+      36
+    ],
+    [
+      -20,
+      46
+    ],
+    [
+      22,
+      -44
+    ],
+    [
+      -52,
+      -56
+    ],
+    [
+      56,
+      60
+    ],
+    [
+      60,
+      -52
+    ],
+    [
+      -40,
+      70
+    ],
+    [
+      -7.5,
+      -69
+    ],
+    [
+      7.5,
+      -76
+    ],
+    [
+      -7.5,
+      -54
+    ],
+    [
+      7.5,
+      -61
+    ],
+    [
+      -7.5,
+      -39
+    ],
+    [
+      7.5,
+      -46
+    ],
+    [
+      -7.5,
+      -24
+    ],
+    [
+      7.5,
+      -31
+    ],
+    [
+      -7.5,
+      -9
+    ],
+    [
+      7.5,
+      -16
+    ],
+    [
+      -7.5,
+      6
+    ],
+    [
+      7.5,
+      -1
+    ],
+    [
+      -7.5,
+      21
+    ],
+    [
+      7.5,
+      14
+    ],
+    [
+      -7.5,
+      36
+    ],
+    [
+      7.5,
+      29
+    ],
+    [
+      -7.5,
+      51
+    ],
+    [
+      7.5,
+      44
+    ],
+    [
+      -7.5,
+      66
+    ],
+    [
+      7.5,
+      59
+    ],
+    [
+      -7.5,
+      81
+    ],
+    [
+      7.5,
+      74
+    ]
+  ],
+  "benches": [
+    {
+      "pos": [
+        -14.6,
+        -20
+      ],
+      "yawDeg": 96
+    },
+    {
+      "pos": [
+        14.6,
+        24
+      ],
+      "yawDeg": -86
+    },
+    {
+      "pos": [
+        -14.6,
+        34
+      ],
+      "yawDeg": 88
+    },
+    {
+      "pos": [
+        14.6,
+        -48
+      ],
+      "yawDeg": -93
+    },
+    {
+      "pos": [
+        -8,
+        -72
+      ],
+      "yawDeg": 152
+    },
+    {
+      "pos": [
+        8,
+        -72
+      ],
+      "yawDeg": -148
+    },
+    {
+      "pos": [
+        -18,
+        47
+      ],
+      "yawDeg": 12
+    },
+    {
+      "pos": [
+        -6.4,
+        -12
+      ],
+      "yawDeg": 94
+    },
+    {
+      "pos": [
+        6.4,
+        6
+      ],
+      "yawDeg": -88
+    },
+    {
+      "pos": [
+        -6.4,
+        40
+      ],
+      "yawDeg": 85
+    },
+    {
+      "pos": [
+        6.4,
+        -56
+      ],
+      "yawDeg": -92
+    },
+    {
+      "pos": [
+        -6.4,
+        64
+      ],
+      "yawDeg": 91
+    }
+  ],
+  "kiosks": [
+    {
+      "pos": [
+        -16.5,
+        62
+      ],
+      "yawDeg": 84
+    },
+    {
+      "pos": [
+        16.8,
+        -62
+      ],
+      "yawDeg": -95
+    },
+    {
+      "pos": [
+        -17,
+        -30
+      ],
+      "yawDeg": 91
+    }
+  ],
+  "bins": [
+    [
+      -13.8,
+      -34
+    ],
+    [
+      13.8,
+      -18
+    ],
+    [
+      -13.8,
+      48
+    ],
+    [
+      13.8,
+      58
+    ],
+    [
+      -6,
+      -70
+    ],
+    [
+      6,
+      -70
+    ],
+    [
+      -18.5,
+      61
+    ],
+    [
+      15.4,
+      -60
+    ],
+    [
+      -6.2,
+      -10
+    ],
+    [
+      6.2,
+      42
+    ]
+  ],
+  "boards": [
+    {
+      "pos": [
+        -14.2,
+        6
+      ],
+      "yawDeg": 87
+    },
+    {
+      "pos": [
+        14.2,
+        -6
+      ],
+      "yawDeg": -92
+    },
+    {
+      "pos": [
+        -16,
+        -68
+      ],
+      "yawDeg": 40
+    }
+  ],
+  "colliders": [
+    {
+      "type": "box",
+      "pos": [
+        0,
+        -88
+      ],
+      "size": [
+        5,
+        5
+      ]
+    }
+  ],
+  "districts": [
+    {
+      "id": "zamostye",
+      "legitimate": true,
+      "poly": [
+        [
+          -80,
+          -104
+        ],
+        [
+          80,
+          -104
+        ],
+        [
+          80,
+          104
+        ],
+        [
+          -80,
+          104
+        ]
+      ]
+    }
+  ],
+  "restricted": [
+    {
+      "id": "station_steps",
+      "pos": [
+        50,
+        -8
+      ],
+      "r": 7.5,
+      "label": "the station steps"
+    }
+  ],
+  "waypoints": {
+    "avenue_n": [
+      -9,
+      52
+    ],
+    "avenue_s": [
+      -9,
+      -62
+    ],
+    "cross_w": [
+      -40,
+      6
+    ],
+    "cross_e": [
+      46,
+      -6
+    ]
+  },
+  "spawns": {
+    "player": [
+      0,
+      62
+    ],
+    "grigori": [
+      -55,
+      66
+    ],
+    "vera": [
+      -47,
+      -33
+    ],
+    "clerk": [
+      -58,
+      47
+    ]
+  },
+  "phoneBooths": [
+    {
+      "pos": [
+        15.6,
+        44
+      ],
+      "yawDeg": -90
+    },
+    {
+      "pos": [
+        -15.6,
+        -56
+      ],
+      "yawDeg": 90
+    }
+  ],
+  "postBoxes": [
+    [
+      -14.2,
+      14
+    ],
+    [
+      13.9,
+      -28
+    ]
+  ],
+  "pumps": [
+    [
+      -22,
+      52
+    ]
+  ],
+  "washing": [
+    {
+      "from": [
+        -25,
+        49
+      ],
+      "to": [
+        -19,
+        49
+      ]
+    },
+    {
+      "from": [
+        45,
+        47
+      ],
+      "to": [
+        51,
+        47
+      ]
+    }
+  ],
+  "roadDashes": [
+    {
+      "from": [
+        17.5,
+        -100
+      ],
+      "to": [
+        17.5,
+        100
+      ]
+    },
+    {
+      "from": [
+        -17.5,
+        -100
+      ],
+      "to": [
+        -17.5,
+        100
+      ]
+    },
+    {
+      "from": [
+        -100,
+        15.5
+      ],
+      "to": [
+        100,
+        15.5
+      ]
+    },
+    {
+      "from": [
+        -100,
+        -15.5
+      ],
+      "to": [
+        100,
+        -15.5
+      ]
+    }
+  ],
+  "crossings": [
+    {
+      "pos": [
+        17.6,
+        8
+      ],
+      "len": 8.5,
+      "across": "x"
+    },
+    {
+      "pos": [
+        -17.6,
+        -8
+      ],
+      "len": 8.5,
+      "across": "x"
+    }
+  ],
+  "bounds": {
+    "x": [
+      -100,
+      100
+    ],
+    "z": [
+      -108,
+      108
+    ]
+  }
+}

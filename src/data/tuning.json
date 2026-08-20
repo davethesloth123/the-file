@@ -1,4 +1,22 @@
 {
+  "player": {
+    "walk": 2.4,
+    "jog": 5.2,
+    "turnRate": 10.0,
+    "radius": 0.42,
+    "stepUp": 0.55
+  },
+  "camera": {
+    "recentreRate": 2.4,
+    "manualHold": 2.2,
+    "jogFovBoost": 7,
+    "minDist": 1.4,
+    "views": [
+      { "dist": 4.7, "shoulder": 0.7, "focus": 1.5, "pitch": 0.15, "fov": 55 },
+      { "dist": 6.6, "shoulder": 0.0, "focus": 1.62, "pitch": 0.22, "fov": 56 },
+      { "dist": 9.8, "shoulder": 0.0, "focus": 1.75, "pitch": 0.36, "fov": 52 }
+    ]
+  },
   "locomotion": {
     "blendTime": 0.22,
     "timeScaleClamp": [0.6, 1.75],

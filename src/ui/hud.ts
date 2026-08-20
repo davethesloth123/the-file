@@ -1,0 +1,86 @@
+// HUD shell, laid out per the design canvas in reference/design/ (which
+// overrides bible §12 where they differ): location top-left, YOUR FILE as
+// accumulating page-lines top-right. Values are honest — the file is empty
+// until the conduct and file systems land; this is the frame they fill.
+const MONO = 'SF Mono,Roboto Mono,Menlo,Consolas,monospace';
+const PAPER = '#ded2b8';
+const MUTE = 'rgba(222,210,184,0.42)';
+
+export interface Hud {
+  setLocation(text: string): void;
+  setFilePages(count: number, note: string): void;
+}
+
+export function createHud(): Hud {
+  const root = document.createElement('div');
+  root.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:5';
+  document.body.appendChild(root);
+
+  // top-left: place line
+  const loc = document.createElement('div');
+  loc.style.cssText = [
+    'position:absolute', 'top:24px', 'left:30px',
+    `color:${MUTE}`, `font:10.5px ${MONO}`, 'letter-spacing:0.2em',
+  ].join(';');
+  loc.textContent = 'ZAMOSTYE · MOSCOW · X.1978';
+  root.appendChild(loc);
+  const rule = document.createElement('div');
+  rule.style.cssText = 'position:absolute;top:44px;left:30px;width:118px;height:1px;background:rgba(222,210,184,0.28)';
+  root.appendChild(rule);
+
+  // top-right: the file as page-lines
+  const fileBox = document.createElement('div');
+  fileBox.style.cssText = [
+    'position:absolute', 'top:24px', 'right:30px',
+    'display:flex', 'flex-direction:column', 'align-items:flex-end', 'gap:7px',
+  ].join(';');
+  const label = document.createElement('div');
+  label.textContent = 'YOUR FILE';
+  label.style.cssText = `color:${MUTE};font:10.5px ${MONO};letter-spacing:0.24em`;
+  fileBox.appendChild(label);
+  const pages = document.createElement('div');
+  pages.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:2px';
+  const pageEls: HTMLDivElement[] = [];
+  for (let i = 0; i < 14; i++) {
+    const p = document.createElement('div');
+    p.style.cssText = `height:2px;width:${34 + ((i * 13) % 46)}px;background:rgba(222,210,184,0.16)`;
+    pages.appendChild(p);
+    pageEls.push(p);
+  }
+  fileBox.appendChild(pages);
+  const countRow = document.createElement('div');
+  countRow.style.cssText = 'display:flex;align-items:baseline;gap:7px';
+  const count = document.createElement('span');
+  count.style.cssText = `color:${PAPER};font:700 20px ${MONO}`;
+  count.textContent = '0';
+  const note = document.createElement('span');
+  note.style.cssText = `color:${MUTE};font:10px ${MONO};letter-spacing:0.16em`;
+  note.textContent = 'NO ADVERSE TRACES';
+  countRow.append(count, note);
+  fileBox.appendChild(countRow);
+  root.appendChild(fileBox);
+
+  // bottom-right: controls, quietly
+  const keysHint = document.createElement('div');
+  keysHint.style.cssText = [
+    'position:absolute', 'bottom:22px', 'right:30px',
+    `color:rgba(222,210,184,0.30)`, `font:10px ${MONO}`, 'letter-spacing:0.18em',
+    'text-align:right', 'line-height:1.9',
+  ].join(';');
+  keysHint.innerHTML = 'WASD MOVE · SHIFT HURRY · DRAG LOOK<br>V CAMERA · TAB BENCH';
+  root.appendChild(keysHint);
+
+  return {
+    setLocation(text: string): void {
+      loc.textContent = text;
+    },
+    setFilePages(n: number, noteText: string): void {
+      count.textContent = String(n);
+      note.textContent = noteText;
+      for (let i = 0; i < pageEls.length; i++) {
+        pageEls[i]!.style.background =
+          i < n ? 'rgba(222,210,184,0.82)' : 'rgba(222,210,184,0.16)';
+      }
+    },
+  };
+}

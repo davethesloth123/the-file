@@ -1,0 +1,131 @@
+{
+  "_comment": "World materials: pre-warmed palette colour (bible \u00a78) + tiling value maps from tools/texture-generator.py, sampled triplanar in world space. texScale is tiles per metre; albedoAmt/grimeAmt are blend strengths.",
+  "stucco_ochre": {
+    "color": "#c09550",
+    "albedo": "textures/stucco_albedo.png",
+    "grime": "textures/stucco_grime.png",
+    "texScale": 0.3,
+    "albedoAmt": 0.55,
+    "grimeAmt": 0.5
+  },
+  "render_sage": {
+    "color": "#77785f",
+    "albedo": "textures/render_albedo.png",
+    "grime": "textures/render_grime.png",
+    "texScale": 0.3,
+    "albedoAmt": 0.5,
+    "grimeAmt": 0.45
+  },
+  "render_bone": {
+    "color": "#b4a88e",
+    "albedo": "textures/render_albedo.png",
+    "grime": "textures/render_grime.png",
+    "texScale": 0.26,
+    "albedoAmt": 0.5,
+    "grimeAmt": 0.55
+  },
+  "brick_rust": {
+    "color": "#9a7350",
+    "albedo": "textures/brick_albedo.png",
+    "grime": "textures/brick_grime.png",
+    "texScale": 0.35,
+    "albedoAmt": 0.7,
+    "grimeAmt": 0.5
+  },
+  "concrete_stone": {
+    "color": "#a79e88",
+    "albedo": "textures/concrete_albedo.png",
+    "grime": "textures/concrete_grime.png",
+    "texScale": 0.18,
+    "albedoAmt": 0.55,
+    "grimeAmt": 0.45
+  },
+  "asphalt": {
+    "color": "#46423a",
+    "albedo": "textures/asphalt_albedo.png",
+    "grime": "textures/asphalt_grime.png",
+    "texScale": 0.18,
+    "albedoAmt": 0.6,
+    "grimeAmt": 0.35
+  },
+  "kerb": {
+    "color": "#6b6355",
+    "albedo": "textures/cobble_albedo.png",
+    "grime": "textures/concrete_grime.png",
+    "texScale": 0.5,
+    "albedoAmt": 0.6,
+    "grimeAmt": 0.35
+  },
+  "stone_plaza": {
+    "color": "#a79e88",
+    "albedo": "textures/cobble_albedo.png",
+    "grime": "textures/asphalt_grime.png",
+    "texScale": 0.55,
+    "albedoAmt": 0.65,
+    "grimeAmt": 0.4
+  },
+  "roof": {
+    "color": "#544c3e",
+    "albedo": "textures/metal_albedo.png",
+    "grime": "textures/metal_grime.png",
+    "texScale": 0.2,
+    "albedoAmt": 0.7,
+    "grimeAmt": 0.5
+  },
+  "trim": {
+    "color": "#35301f",
+    "albedo": "textures/metal_albedo.png",
+    "grime": "textures/metal_grime.png",
+    "texScale": 0.4,
+    "albedoAmt": 0.5,
+    "grimeAmt": 0.3
+  },
+  "rust_metal": {
+    "color": "#9a7350",
+    "albedo": "textures/metal_albedo.png",
+    "grime": "textures/metal_grime.png",
+    "texScale": 0.5,
+    "albedoAmt": 0.95,
+    "grimeAmt": 0.6
+  },
+  "state_red": {
+    "color": "#c0201f",
+    "albedo": "textures/render_albedo.png",
+    "grime": "textures/render_grime.png",
+    "texScale": 0.3,
+    "albedoAmt": 0.35,
+    "grimeAmt": 0.25
+  },
+  "bark": {
+    "color": "#544c3e",
+    "albedo": "textures/metal_albedo.png",
+    "grime": "textures/metal_grime.png",
+    "texScale": 0.8,
+    "albedoAmt": 0.7,
+    "grimeAmt": 0.3
+  },
+  "cobble": {
+    "color": "#6b6355",
+    "albedo": "textures/cobble_albedo.png",
+    "grime": "textures/cobble_grime.png",
+    "texScale": 0.55,
+    "albedoAmt": 0.75,
+    "grimeAmt": 0.4
+  },
+  "planks": {
+    "color": "#9a7350",
+    "albedo": "textures/planks_albedo.png",
+    "grime": "textures/planks_grime.png",
+    "texScale": 0.6,
+    "albedoAmt": 0.8,
+    "grimeAmt": 0.4
+  },
+  "tile_floor": {
+    "color": "#a79e88",
+    "albedo": "textures/tile_albedo.png",
+    "grime": "textures/tile_grime.png",
+    "texScale": 0.5,
+    "albedoAmt": 0.8,
+    "grimeAmt": 0.35
+  }
+}
