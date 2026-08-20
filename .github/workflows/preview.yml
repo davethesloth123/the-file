@@ -37,6 +37,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # the null case protects the design thesis; a red test is a red deploy
+      - run: npm test
+      # no tuning number may appear in a .ts file (CLAUDE.md hard rule)
+      - run: npm run check:numbers
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

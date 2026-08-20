@@ -1,0 +1,14 @@
+{
+  "rules": [
+    { "id": "service",     "rate": 14.0, "label": "Servicing a dead drop" },
+    { "id": "flagged",     "rate":  8.0, "label": "Talking with a flagged person" },
+    { "id": "curfew",      "rate":  6.0, "label": "Out after curfew" },
+    { "id": "threshold",   "rate":  5.5, "label": "Loitering on {place}" },
+    { "id": "running",     "rate":  4.2, "label": "Running in the street" },
+    { "id": "offDistrict", "rate":  2.5, "label": "Outside your district" },
+    { "id": "loitering",   "rate":  1.6, "label": "Standing about too long",
+      "after": 9.0 }
+  ],
+  "multipliers": { "contraband": 1.9, "operational": 1.4 },
+  "observerScaling": "additive"
+}

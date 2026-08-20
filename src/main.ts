@@ -19,7 +19,11 @@ import { Actor, loadArchetype } from './actors/actor';
 import { PlayerState } from './actors/player';
 import { buildLevel } from './world/level';
 import { CollisionWorld } from './world/collision';
-import { createHud } from './ui/hud';
+import { createHud, type Hud } from './ui/hud';
+import { Patrol } from './actors/patrol';
+import { evaluateConduct, type ActiveConduct } from './systems/conduct';
+import { FileMeter } from './systems/file';
+import { CONE_RANGE, CONE_FOV } from './systems/observation';
 
 const QUERY = new URLSearchParams(location.search);
 const GRADE_OFF = QUERY.get('grade') === 'off';
@@ -156,11 +160,7 @@ function updateLineupLabels(): void {
   }
 }
 
-const PATROL_A: Route = [[-9, -62], [-9, -14], [9, -14], [9, -62]];
-const PATROL_B: Route = [[9, 52], [9, 6], [-9, 6], [-9, 52]];
 const CITY_CAST: [archetype: string, route: Route, startIndex: number, speed: number | null, height: number, coatIndex: number][] = [
-  ['militia',      PATROL_A,               0, null, 1.0,  0],
-  ['militia',      PATROL_B,               2, null, 0.98, 0],
   ['civilian_m',   [[-11, 70], [-11, -40]], 0, null, 0.97, 1],
   ['civilian_m',   [[11, -50], [11, 40]],   1, 2.4,  1.04, 2],
   ['civilian_f',   [[-40, 6], [-11, 6]],    0, null, 0.98, 0],
@@ -211,10 +211,48 @@ let player: PlayerState | null = null;
 let playerActor: Actor | null = null;
 const trailing = new TrailingCamera(camera, renderer.domElement);
 
+// ---------------------------------------------- conduct, patrols, file
+interface PatrolUnit { patrol: Patrol; actor: Actor; fan: THREE.Mesh }
+const patrolUnits: PatrolUnit[] = [];
+const file = new FileMeter();
+let hud: Hud | null = null;
+let stillSeconds = 0;
+let restrictedZones: { pos: [number, number]; r: number; label: string }[] = [];
+let lastConduct: ActiveConduct | null = null;
+let lastObservers = 0;
+
+const FAN_MATERIAL = new THREE.MeshBasicMaterial({
+  color: 0xc0201f,
+  transparent: true,
+  opacity: 0.12,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+});
+
+async function spawnPatrols(routes: { route: [number, number][] }[]): Promise<void> {
+  const asset = await loadArchetype('militia');
+  for (const r of routes) {
+    const patrol = new Patrol(r.route, asset.naturalSpeeds['walk'] ?? 1);
+    const actor = new Actor(asset, {});
+    scene.add(actor.group);
+    // the fan is built from the SAME tuning values and the SAME pose the
+    // detection cone uses — pillar III lives here
+    const fan = new THREE.Mesh(
+      new THREE.CircleGeometry(CONE_RANGE, 26, -CONE_FOV / 2, CONE_FOV),
+      FAN_MATERIAL.clone(),
+    );
+    fan.rotation.x = -Math.PI / 2;
+    scene.add(fan);
+    patrolUnits.push({ patrol, actor, fan });
+  }
+}
+
 async function startPlay(): Promise<void> {
   const level = buildLevel(scene);
   world = new CollisionWorld(level.walls, level.surfaces);
-  createHud();
+  hud = createHud();
+  restrictedZones = level.restricted.map((r) => ({ pos: r.pos, r: r.r, label: r.label }));
+  void spawnPatrols(level.patrols);
   // interior NPCs: shopkeepers, the clerk, the duty officer, the mechanic
   void (async () => {
     for (const n of level.npcs) {
@@ -276,6 +314,35 @@ renderer.setAnimationLoop((nowMs: number) => {
         hurrying: shiftHeld,
       }, trailing.yaw + Math.PI, world);
     }
+    if (player) {
+      // conduct: what is Andrei doing, and can anyone see it
+      stillSeconds = player.moving ? 0 : stillSeconds + dt;
+      let restrictedLabel: string | null = null;
+      for (const zone of restrictedZones) {
+        if (Math.hypot(player.x - zone.pos[0], player.z - zone.pos[1]) < zone.r) {
+          restrictedLabel = zone.label;
+          break;
+        }
+      }
+      const conduct = evaluateConduct({
+        servicing: false,
+        talkingToFlagged: false,
+        afterCurfew: false,
+        restrictedLabel,
+        hurrying: player.hurrying,
+        moving: player.moving,
+        stillSeconds,
+        atBench: false,
+        offDistrict: false,
+      });
+      let observers = 0;
+      for (const u of patrolUnits) {
+        if (u.patrol.step(dt, player.x, player.z, conduct !== null, world)) observers++;
+      }
+      file.accrue(conduct, observers, 1, dt);
+      lastConduct = conduct;
+      lastObservers = observers;
+    }
   });
 
   for (const w of walkers) {
@@ -307,6 +374,24 @@ renderer.setAnimationLoop((nowMs: number) => {
         jogging: player.hurrying && player.moving,
       }, world);
     }
+  }
+
+  for (const u of patrolUnits) {
+    const p = u.patrol;
+    const ix = p.px + (p.x - p.px) * alpha;
+    const iz = p.pz + (p.z - p.pz) * alpha;
+    const dyaw = ((p.yaw - p.pyaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const iyaw = p.pyaw + dyaw * alpha;
+    u.actor.group.position.set(ix, world.groundHeight(ix, iz, 0.3), iz);
+    u.actor.group.rotation.y = iyaw;
+    u.actor.update(p.currentSpeed, frameDt);
+    u.fan.position.set(ix, world.groundHeight(ix, iz, 0.3) + 0.08, iz);
+    u.fan.rotation.z = -iyaw;
+    (u.fan.material as THREE.MeshBasicMaterial).opacity = 0.10 + p.alert * 0.25;
+  }
+  if (hud) {
+    hud.setConduct(lastConduct?.label ?? null, lastObservers);
+    hud.setFilePages(Math.round(file.value), file.tierLabel().toUpperCase());
   }
 
   freecam.update(frameDt);
