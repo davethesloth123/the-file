@@ -17,6 +17,17 @@ export class Patrol {
   private targetIndex = 1;
   /** actual ground speed this step, for the locomotion blend */
   currentSpeed = 0;
+  /** Vera's tip slows every beat (×patrolSlow); informing reverts it. */
+  speedFactor = 1;
+  /** a diversion: walk toward the noise instead of the beat, briefly */
+  private probe: [number, number] | null = null;
+  private probeT = 0;
+
+  /** Send the patrol to investigate a noise for `seconds`. */
+  investigate(x: number, z: number, seconds: number): void {
+    this.probe = [x, z];
+    this.probeT = seconds;
+  }
 
   constructor(
     readonly route: [number, number][],
@@ -50,14 +61,21 @@ export class Patrol {
       const turn = ((want - this.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
       this.yaw += turn * Math.min(1, dt * P.faceRate);
     } else {
-      const [tx, tz] = this.route[this.targetIndex]!;
+      let tx: number, tz: number;
+      if (this.probe && (this.probeT -= dt) > 0) {
+        [tx, tz] = this.probe;
+      } else {
+        this.probe = null;
+        [tx, tz] = this.route[this.targetIndex]!;
+      }
       const dx = tx - this.x, dz = tz - this.z;
       const dist = Math.hypot(dx, dz);
       if (dist < P.waypointRadius) {
-        this.targetIndex = (this.targetIndex + 1) % this.route.length;
+        if (!this.probe) this.targetIndex = (this.targetIndex + 1) % this.route.length;
       } else {
-        this.x += (dx / dist) * this.speed * dt;
-        this.z += (dz / dist) * this.speed * dt;
+        const speed = this.speed * this.speedFactor;
+        this.x += (dx / dist) * speed * dt;
+        this.z += (dz / dist) * speed * dt;
         const want = Math.atan2(dx, dz);
         const turn = ((want - this.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
         this.yaw += turn * Math.min(1, dt * P.turnRate);

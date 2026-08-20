@@ -17,6 +17,12 @@ export class FileMeter {
     this.value = Math.min(F.max, this.value + conduct.rate * observers * multiplier * dt);
   }
 
+  /** The ONLY reduction path: an explicit player transaction (the clerk,
+   *  informing). Nothing else may call this — there is no decay. */
+  transact(cut: number): void {
+    this.value = Math.max(0, this.value - cut);
+  }
+
   tierLabel(): string {
     let label = F.tiers[0]!.label;
     for (const tier of F.tiers) {
