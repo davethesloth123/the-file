@@ -8,30 +8,17 @@
 // walkable surfaces and NPC posts all come from the JSON-driven build.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import mapJson from '../data/map.zamostye.json';
 import { worldMaterial, toonColor } from '../render/worldmat';
 import type { WallBox, Surface } from './collision';
-
-interface WingDef { dx: number; dz: number; w: number; d: number; floorsDelta: number }
-
-interface BuildingDef {
-  id: string;
-  pos: [number, number];
-  size: [number, number];
-  floors: number;
-  style: string;
-  seed: number;
-  yawDeg?: number;
-  wings?: WingDef[];
-  stateLintel?: boolean;
-  chimney?: boolean;
-  chamfer?: boolean;
-  kind?: 'house';
-  units?: number;
-  open?: 'flats' | 'office' | 'works' | 'shops' | 'station' | 'motorpool';
-}
+import { mapLocation } from '../data/content';
+import tuning from '../data/tuning.json';
+import type {
+  AmbientWalkerDef, BuildingDef, InteractionSpotId, MapData,
+  StaticActorDef, Vec2,
+} from '../data/content';
 
 export interface NpcSpawn {
+  id: string;
   archetype: string;
   pos: [number, number];
   y: number;
@@ -39,41 +26,11 @@ export interface NpcSpawn {
   coatIndex?: number;
 }
 
-interface MapData {
-  ground: { size: [number, number]; material: string };
-  pavements: { pos: [number, number]; size: [number, number] }[];
-  buildings: BuildingDef[];
-  garages: { pos: [number, number]; size: [number, number]; yawDeg: number }[];
-  walls: { from: [number, number]; to: [number, number]; h: number }[];
-  cars: { pos: [number, number]; yawDeg: number; color: string }[];
-  plaza: { pos: [number, number]; r: number; material: string };
-  monument: { pos: [number, number]; plinth: [number, number, number]; banner: [number, number, number] };
-  tram: { x: number; railGap: number; from: number; to: number; wireHeight: number };
-  lamps: { xs: number[]; from: number; to: number; step: number };
-  manholes: [number, number][];
-  trees: [number, number][];
-  benches: { pos: [number, number]; yawDeg: number }[];
-  kiosks: { pos: [number, number]; yawDeg: number }[];
-  bins: [number, number][];
-  boards: { pos: [number, number]; yawDeg: number }[];
-  phoneBooths: { pos: [number, number]; yawDeg: number }[];
-  postBoxes: [number, number][];
-  pumps: [number, number][];
-  washing: { from: [number, number]; to: [number, number] }[];
-  roadDashes: { from: [number, number]; to: [number, number] }[];
-  crossings: { pos: [number, number]; len: number; across: string }[];
-  bounds: { x: [number, number]; z: [number, number] };
-  patrols: { route: [number, number][] }[];
-  colliders: { type: string; pos: [number, number]; size: [number, number] }[];
-  restricted: { id: string; pos: [number, number]; r: number; label: string }[];
-  waypoints: Record<string, [number, number]>;
-  spawns: Record<string, [number, number]>;
-  poles?: [number, number][];
-  puddles?: [x: number, z: number, rx: number, rz: number][];
-}
+export type ResolvedStaticActorDef = Omit<StaticActorDef, 'at'> & { pos: Vec2 };
 
 export interface LevelData {
   walls: WallBox[];
+  cameraObstacles: WallBox[];
   surfaces: Surface[];
   occluders: THREE.Object3D[];
   npcs: NpcSpawn[];
@@ -81,6 +38,10 @@ export interface LevelData {
   waypoints: Record<string, [number, number]>;
   spawns: Record<string, [number, number]>;
   restricted: { id: string; pos: [number, number]; r: number; label: string }[];
+  ambientCast: AmbientWalkerDef[];
+  staticActors: ResolvedStaticActorDef[];
+  interactions: Record<InteractionSpotId, Vec2>;
+  dynamicDoors: Record<string, THREE.Object3D>;
 }
 
 function mulberry32(seed: number): () => number {
@@ -141,6 +102,109 @@ class KitBag {
     this.add(material, g);
   }
 
+  /** Low-poly ellipsoid used for foliage masses and shrubs. A faceted
+   *  icosahedron keeps the existing graphic identity and is dramatically
+   *  cheaper than modelling individual leaves. */
+  ellipsoid(
+    material: string,
+    rx: number, ry: number, rz: number,
+    x: number, y: number, z: number,
+    yaw = 0,
+  ): void {
+    const g = new THREE.DodecahedronGeometry(1, 0);
+    g.scale(rx, ry, rz);
+    if (yaw) g.rotateY(yaw);
+    g.translate(x, y, z);
+    this.add(material, g);
+  }
+
+  /** Three crossed alpha-tested cards form an irregular foliage spray. This
+   *  reads as layered leaves from any street-level angle at six triangles per
+   *  spray—far cheaper and more leaf-like than a solid faceted boulder. */
+  foliageCluster(
+    material: string,
+    w: number, h: number,
+    x: number, y: number, z: number,
+    yaw = 0,
+  ): void {
+    for (let i = 0; i < 3; i++) {
+      const g = new THREE.PlaneGeometry(w, h);
+      g.rotateY(yaw + (i * Math.PI) / 3);
+      g.translate(x, y, z);
+      this.add(material, g);
+    }
+  }
+
+  /** A low-cost tapered cuboid, used where a plain box would read as a
+   *  placeholder. Dimensions are local; `ry` rotates the finished solid. */
+  taperedBox(
+    material: string,
+    bottomW: number, bottomD: number,
+    topW: number, topD: number,
+    h: number,
+    x: number, y: number, z: number,
+    ry = 0,
+  ): void {
+    const bw = bottomW / 2, bd = bottomD / 2;
+    const tw = topW / 2, td = topD / 2;
+    const hh = h / 2;
+    const positions = [
+      -bw, -hh, -bd, bw, -hh, -bd, bw, -hh, bd, -bw, -hh, bd,
+      -tw, hh, -td, tw, hh, -td, tw, hh, td, -tw, hh, td,
+    ];
+    const indices = [
+      0, 2, 1, 0, 3, 2,
+      4, 5, 6, 4, 6, 7,
+      0, 1, 5, 0, 5, 4,
+      1, 2, 6, 1, 6, 5,
+      2, 3, 7, 2, 7, 6,
+      3, 0, 4, 3, 4, 7,
+    ];
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(16).fill(0), 2));
+    g.setIndex(indices);
+    g.computeVertexNormals();
+    if (ry) g.rotateY(ry);
+    g.translate(x, y, z);
+    this.add(material, g);
+  }
+
+  /** Cylinder whose axle starts on local X, then follows an object's yaw. */
+  wheel(
+    material: string,
+    radius: number, width: number, segments: number,
+    x: number, y: number, z: number, ry: number,
+  ): void {
+    const g = new THREE.CylinderGeometry(radius, radius, width, segments);
+    g.rotateZ(Math.PI / 2);
+    if (ry) g.rotateY(ry);
+    g.translate(x, y, z);
+    this.add(material, g);
+  }
+
+  beam(
+    material: string,
+    radius: number,
+    from: THREE.Vector3,
+    to: THREE.Vector3,
+    segments = 6,
+  ): void {
+    const direction = to.clone().sub(from);
+    const length = direction.length();
+    if (length < 0.001) return;
+    const g = new THREE.CylinderGeometry(radius, radius, length, segments);
+    g.applyQuaternion(
+      new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize()),
+    );
+    g.translate(
+      (from.x + to.x) / 2,
+      (from.y + to.y) / 2,
+      (from.z + to.z) / 2,
+    );
+    this.add(material, g);
+  }
+
   /** Gable roof: triangular prism, ridge along the local x axis. */
   prism(
     material: string,
@@ -195,37 +259,101 @@ class KitBag {
 const FLOOR_H = 2.6;
 const GROUND_FLOOR_H = 3.2;
 const WALL_T = 0.32;
+const STAIR_RAIL_END_CLEARANCE = tuning.player.radius + 0.09;
+const STAIR_TREAD_THICKNESS = 0.16;
+const STAIR_RISER_THICKNESS = 0.08;
 
 function storeyBase(s: number): number {
   return s === 0 ? 0.16 : GROUND_FLOOR_H + (s - 1) * FLOOR_H;
 }
 
+/** Physical datum for authored outdoor objects. Pavement and plaza meshes
+ *  stand above the road, so every prop must derive its base from the same
+ *  source instead of assuming y=0. */
+export function placementBaseY(map: MapData, x: number, z: number): number {
+  let y = 0;
+  for (const pavement of map.pavements) {
+    if (
+      Math.abs(x - pavement.pos[0]) <= pavement.size[0] / 2
+      && Math.abs(z - pavement.pos[1]) <= pavement.size[1] / 2
+    ) y = Math.max(y, 0.22);
+  }
+  if (Math.hypot(x - map.plaza.pos[0], z - map.plaza.pos[1]) <= map.plaza.r) {
+    y = Math.max(y, 0.3);
+  }
+  return y;
+}
+
+function rotatedHalfExtents(hw: number, hd: number, ry: number): [number, number] {
+  const c = Math.abs(Math.cos(ry)), s = Math.abs(Math.sin(ry));
+  return [hw * c + hd * s, hw * s + hd * c];
+}
+
 interface BuildCtx {
+  scene: THREE.Scene;
   bag: KitBag;
   walls: WallBox[];
+  cameraObstacles: WallBox[];
   surfaces: Surface[];
   lights: THREE.PointLight[];
   npcs: NpcSpawn[];
+  dynamicDoors: Record<string, THREE.Object3D>;
 }
 
 function buildCar(
   bag: KitBag, walls: WallBox[],
   x: number, z: number, yawDeg: number, color: string,
+  baseY = 0,
 ): void {
   const ry = (yawDeg * Math.PI) / 180;
-  bag.box(color, 1.65, 0.55, 4.1, x, 0.62, z, ry);
-  bag.box(color, 1.5, 0.5, 2.0, x - Math.sin(ry) * 0.15, 1.12, z - Math.cos(ry) * 0.15, ry);
-  for (const [sx, sz] of [[-0.78, 1.3], [0.78, 1.3], [-0.78, -1.3], [0.78, -1.3]]) {
-    const wxp = x + sx! * Math.cos(ry) + sz! * Math.sin(ry);
-    const wzp = z - sx! * Math.sin(ry) + sz! * Math.cos(ry);
-    bag.cylinder('trim', 0.3, 0.3, 0.22, 8, wxp, 0.3, wzp, Math.PI / 2);
+  const local = (lx: number, lz: number): [number, number] => [
+    x + lx * Math.cos(ry) + lz * Math.sin(ry),
+    z - lx * Math.sin(ry) + lz * Math.cos(ry),
+  ];
+  const box = (
+    material: string, w: number, h: number, d: number,
+    lx: number, ly: number, lz: number,
+  ): void => {
+    const [wx, wz] = local(lx, lz);
+    bag.box(material, w, h, d, wx, baseY + ly, wz, ry);
+  };
+
+  // 1970s compact saloon: wheels establish the ground plane, with a low
+  // sill, distinct bonnet/boot, tapered passenger cell and readable glazing.
+  box(color, 1.72, 0.5, 4.18, 0, 0.62, 0);
+  box(color, 1.66, 0.22, 1.25, 0, 0.98, 1.43);
+  box(color, 1.66, 0.24, 1.05, 0, 0.99, -1.55);
+  {
+    const [cx, cz] = local(0, -0.08);
+    bag.taperedBox(color, 1.58, 2.18, 1.36, 1.72, 0.72, cx, baseY + 1.25, cz, ry);
   }
-  walls.push({ x, z, hw: 1.2, hd: 2.2, y0: 0, y1: 1.4 });
+  box(color, 1.4, 0.1, 1.72, 0, 1.64, -0.08);
+
+  for (const side of [-1, 1]) {
+    for (const lz of [-0.5, 0.48]) box('glass', 0.035, 0.4, 0.78, side * 0.75, 1.3, lz);
+    for (const lz of [-0.54, 0.45]) box('trim', 0.035, 0.07, 0.28, side * 0.875, 0.98, lz);
+  }
+  box('glass', 1.34, 0.4, 0.035, 0, 1.3, 0.94);
+  box('glass', 1.34, 0.4, 0.035, 0, 1.3, -1.02);
+  box('trim', 1.82, 0.11, 0.12, 0, 0.53, 2.14);
+  box('trim', 1.82, 0.11, 0.12, 0, 0.53, -2.14);
+  for (const lx of [-0.5, 0.5]) {
+    box('render_bone', 0.38, 0.17, 0.045, lx, 0.86, 2.105);
+    box('rust_metal', 0.34, 0.15, 0.045, lx, 0.84, -2.105);
+  }
+
+  for (const [lx, lz] of [[-0.83, 1.38], [0.83, 1.38], [-0.83, -1.38], [0.83, -1.38]]) {
+    const [wx, wz] = local(lx!, lz!);
+    bag.wheel('trim', 0.32, 0.24, 12, wx, baseY + 0.32, wz, ry);
+    bag.wheel('concrete_stone', 0.14, 0.255, 10, wx, baseY + 0.32, wz, ry);
+  }
+  const [hw, hd] = rotatedHalfExtents(0.94, 2.18, ry);
+  walls.push({ x, z, hw, hd, y0: baseY, y1: baseY + 1.69 });
 }
 
 // ------------------------------------------------------------- buildings
 function building(ctx: BuildCtx, b: BuildingDef): void {
-  const { bag, walls, surfaces, lights, npcs } = ctx;
+  const { scene, bag, walls, cameraObstacles, surfaces, lights, npcs, dynamicDoors } = ctx;
   const rand = mulberry32(b.seed);
   const yaw = ((b.yawDeg ?? 0) * Math.PI) / 180;
   const cy = Math.cos(yaw), sy = Math.sin(yaw);
@@ -246,6 +374,10 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
   const dressings = (w: number, d: number, h: number, ox: number, oz: number): void => {
     put('roof', w * 1.03, 0.5, d * 1.03, ox, h + 0.25, oz);
     put('trim', w + 0.24, 0.3, d + 0.24, ox, h - 0.35, oz);
+    // Shallow eaves gutters make the roof-to-wall junction read as assembled
+    // architecture and give the existing downpipes a plausible source.
+    put('rust_metal', w + 0.18, 0.09, 0.12, ox, h + 0.02, oz + d / 2 + 0.08);
+    put('rust_metal', w + 0.18, 0.09, 0.12, ox, h + 0.02, oz - d / 2 - 0.08);
     if (hasStringCourse) put('trim', w + 0.16, 0.16, d + 0.16, ox, GROUND_FLOOR_H, oz);
     const nChimneys = 1 + Math.floor(rand() * 2);
     for (let c = 0; c < nChimneys; c++) {
@@ -305,6 +437,12 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
           place(along + 0.85, 1.3, 0.22, 2.6, 0.2, 'concrete_stone', 0.08);
           if (b.stateLintel) place(along, 2.75, 2.2, 0.5, 0.34, 'state_red');
           place(along, 0.12, 2.4, 0.24, 1.6, 'concrete_stone');
+          // Handle, letter plate and a small enamel number plaque.
+          place(along + 0.43, 1.14, 0.08, 0.08, 0.11, 'trim', 0.2);
+          place(along, 1.46, 0.48, 0.07, 0.08, 'trim', 0.19);
+          place(along + 1.05, 2.08, 0.38, 0.27, 0.08, 'render_bone', 0.13);
+          place(along + 0.98, 2.08, 0.045, 0.17, 0.09, 'trim', 0.18);
+          place(along + 1.11, 2.08, 0.045, 0.17, 0.09, 'trim', 0.18);
         } else if (rand() < 0.3) {
           place(along, 1.55, 1.7, 1.7, 0.14, 'trim');
           place(along, 1.62, 1.9, 0.08, 0.06, 'render_bone', 0.1);
@@ -331,7 +469,11 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
           const y = GROUND_FLOOR_H + (fl - 0.5) * FLOOR_H;
           if (y > h - 1.2) continue;
           place(along, y, 1.16 * winScale, 1.66 * winScale, 0.1, 'render_bone');
-          place(along, y, 1.0 * winScale, 1.5 * winScale, 0.14, 'glass');
+          const litWindow = isEntrance && fl === 1 && (i + b.seed) % 5 === 0;
+          place(
+            along, y, 1.0 * winScale, 1.5 * winScale, 0.14,
+            litWindow ? 'window_glow' : 'glass',
+          );
           place(along, y - 0.78 * winScale, 1.2 * winScale, 0.08, 0.1, 'concrete_stone', 0.06);
           // the camera reads floors 1-2 of the street facade: give those
           // windows lintels and jambs so the ink pass has reveals to draw
@@ -339,6 +481,19 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
             place(along, y + 0.92 * winScale, 1.46 * winScale, 0.16, 0.12, 'concrete_stone', 0.05);
             place(along - 0.63 * winScale, y, 0.11, 1.62 * winScale, 0.12, 'concrete_stone', 0.05);
             place(along + 0.63 * winScale, y, 0.11, 1.62 * winScale, 0.12, 'concrete_stone', 0.05);
+            // Near-player windows get real mullions. Some have restrained
+            // blinds set just behind the glass, adding depth without faking a
+            // fully modelled interior in every building.
+            place(along, y, 0.05, 1.48 * winScale, 0.16, 'trim', 0.03);
+            place(along, y + 0.02, 0.98 * winScale, 0.045, 0.16, 'trim', 0.03);
+            if ((i + fl + b.seed) % 3 === 0) {
+              for (let sl = -2; sl <= 2; sl++) {
+                place(
+                  along, y + sl * 0.23 * winScale,
+                  0.82 * winScale, 0.035, 0.045, 'render_bone', -0.035,
+                );
+              }
+            }
           }
           if (fl === balconyFloor && rand() < 0.3) {
             place(along, y - 0.85, 1.7, 0.12, 0.85, 'concrete_stone', 0.42);
@@ -413,12 +568,26 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
       const lz = entranceAxis === 'z' ? es * (d0 / 2 - iin) : tt;
       return [wxOf(lx, lz), wzOf(lx, lz)];
     };
+    const beamF = (
+      material: string,
+      from: [number, number, number],
+      to: [number, number, number],
+      radius = 0.035,
+    ): void => {
+      const [fx, fz] = worldOfF(from[0], from[2]);
+      const [tx, tz] = worldOfF(to[0], to[2]);
+      bag.beam(
+        material, radius,
+        new THREE.Vector3(fx, from[1], fz),
+        new THREE.Vector3(tx, to[1], tz),
+      );
+    };
     const bulb = (tt: number, y: number, iin: number): void => {
       const [lxw, lzw] = worldOfF(tt, iin);
       const light = new THREE.PointLight(0xffeec4, 15, 11, 2);
       light.position.set(lxw, y - 0.35, lzw);
       lights.push(light);
-      putF('render_bone', 0.15, 0.15, 0.15, tt, y + 0.12, iin);
+      putF('light_glow', 0.15, 0.15, 0.15, tt, y + 0.12, iin);
     };
     const flatF = (tt0: number, tt1: number, in0: number, in1: number, y: number): void => {
       const [cxw, czw] = worldOfF((tt0 + tt1) / 2, (in0 + in1) / 2);
@@ -430,23 +599,51 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
         y,
       });
     };
-    const wallF = (tt0: number, tt1: number, in0: number, in1: number, y0: number, y1: number): void => {
+    const stairF = (tt0: number, tt1: number, in0: number, in1: number, y: number): void => {
+      const [cxw, czw] = worldOfF((tt0 + tt1) / 2, (in0 + in1) / 2);
+      const hwT = Math.abs(tt1 - tt0) / 2, hdI = Math.abs(in1 - in0) / 2;
+      surfaces.push({
+        kind: 'stair', x: cxw, z: czw,
+        hw: entranceAxis === 'z' ? hwT : hdI,
+        hd: entranceAxis === 'z' ? hdI : hwT,
+        y,
+      });
+    };
+    const wallF = (
+      tt0: number, tt1: number, in0: number, in1: number,
+      y0: number, y1: number, camera = true,
+    ): void => {
       const [cxw, czw] = worldOfF((tt0 + tt1) / 2, (in0 + in1) / 2);
       const hwT = Math.abs(tt1 - tt0) / 2 + 0.02, hdI = Math.abs(in1 - in0) / 2 + 0.02;
       walls.push({
         x: cxw, z: czw,
         hw: entranceAxis === 'z' ? hwT : hdI,
         hd: entranceAxis === 'z' ? hdI : hwT,
+        y0, y1, camera,
+      });
+    };
+    const cameraWallF = (
+      tt0: number, tt1: number, in0: number, in1: number, y0: number, y1: number,
+    ): void => {
+      const [cxw, czw] = worldOfF((tt0 + tt1) / 2, (in0 + in1) / 2);
+      const hwT = Math.abs(tt1 - tt0) / 2, hdI = Math.abs(in1 - in0) / 2;
+      cameraObstacles.push({
+        x: cxw, z: czw,
+        hw: entranceAxis === 'z' ? hwT : hdI,
+        hd: entranceAxis === 'z' ? hdI : hwT,
         y0, y1,
       });
     };
-    const npcF = (archetype: string, tt: number, iin: number, faceOut: boolean, coatIndex = 0): void => {
+    const npcF = (
+      id: string, archetype: string,
+      tt: number, iin: number, faceOut: boolean, coatIndex = 0,
+    ): void => {
       const [nx2, nz2] = worldOfF(tt, iin);
       // face along the entrance axis, toward or away from the door
       let yawDeg: number;
       if (entranceAxis === 'z') yawDeg = es > 0 ? (faceOut ? 0 : 180) : (faceOut ? 180 : 0);
       else yawDeg = es > 0 ? (faceOut ? 90 : 270) : (faceOut ? 270 : 90);
-      npcs.push({ archetype, pos: [nx2, nz2], y: 0.16, yawDeg, coatIndex });
+      npcs.push({ id, archetype, pos: [nx2, nz2], y: 0.16, yawDeg, coatIndex });
     };
 
     const doorHalfW = b.open === 'motorpool' ? 1.7 : 0.8;
@@ -463,7 +660,9 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
       const x0 = -((nx - 1) * 2.2) / 2;
       const ow = 1.0 * winScale;
       const isEntrance = f.axis === entranceAxis && f.sign === entranceSign;
-      const doorSlot = isEntrance ? Math.floor(nx / 2) : -1;
+      const isStaffDoor = b.id === 'records'
+        && f.axis === entranceAxis && f.sign === -entranceSign;
+      const doorSlot = isEntrance ? Math.floor(nx / 2) : isStaffDoor ? 0 : -1;
 
       const seg = (from: number, to: number, y0f: number, y1f: number): void => {
         if (to - from < 0.02) return;
@@ -503,7 +702,7 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
           }
         }
       }
-      if (isEntrance) {
+      if (isEntrance || isStaffDoor) {
         const dc = x0 + doorSlot * 2.2;
         const mk = (a: number, bb: number): void => {
           if (bb - a < 0.05) return;
@@ -513,6 +712,37 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
         };
         mk(-L / 2, dc - doorHalfW);
         mk(dc + doorHalfW, L / 2);
+        if (isStaffDoor) {
+          const [doorX, doorZ] = f.axis === 'z'
+            ? [wxOf(dc, f.sign * half), wzOf(dc, f.sign * half)]
+            : [wxOf(f.sign * half, dc), wzOf(f.sign * half, dc)];
+          walls.push({
+            id: 'records_staff_door', x: doorX, z: doorZ,
+            hw: f.axis === 'z' ? doorHalfW : WALL_T / 2 + 0.03,
+            hd: f.axis === 'z' ? WALL_T / 2 + 0.03 : doorHalfW,
+            y0: 0, y1: 2.65, enabled: true,
+          });
+
+          // Derive the moving leaf from the authored building instead of
+          // duplicating its world-space placement in the level dressing pass.
+          const hingeT = dc - 0.71;
+          const hingeIn = f.sign * (half + 0.12);
+          const staffDoor = new THREE.Group();
+          const [hingeX, hingeZ] = f.axis === 'z'
+            ? [wxOf(hingeT, hingeIn), wzOf(hingeT, hingeIn)]
+            : [wxOf(hingeIn, hingeT), wzOf(hingeIn, hingeT)];
+          staffDoor.position.set(hingeX, 0, hingeZ);
+          staffDoor.rotation.y = yaw;
+          const staffDoorLeaf = new THREE.Mesh(
+            new THREE.BoxGeometry(1.42, 2.52, 0.14),
+            worldMaterial('wood_door'),
+          );
+          staffDoorLeaf.position.set(0.71, 1.26, 0);
+          staffDoorLeaf.castShadow = staffDoorLeaf.receiveShadow = true;
+          staffDoor.add(staffDoorLeaf);
+          scene.add(staffDoor);
+          dynamicDoors.records_staff_door = staffDoor;
+        }
       } else {
         if (f.axis === 'z') walls.push({ x: wxOf(0, f.sign * half), z: wzOf(0, f.sign * half), hw: L / 2, hd: WALL_T / 2 + 0.03, y0: 0, y1: h });
         else walls.push({ x: wxOf(f.sign * half, 0), z: wzOf(f.sign * half, 0), hw: WALL_T / 2 + 0.03, hd: L / 2, y0: 0, y1: h });
@@ -521,6 +751,7 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
 
     dressings(w0, d0, h, 0, 0);
     putF('roof', 0.1, 2.4, 0.9, 1.05, 1.2, 0.62);
+    putF('trim', 0.08, 0.08, 0.11, 1.0, 1.15, 0.16);
     putF('concrete_stone', 2.4, 0.24, 1.6, 0, 0.12, -0.6);
     flatF(-1.2, 1.2, -1.4, 0.2, 0.24);
 
@@ -542,6 +773,9 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
           const [bx, bz] = worldOfF(tt, Din * 0.62);
           bag.cylinder('rust_metal', 1.05, 1.05, 4.3, 12, bx, 1.35, bz, Math.PI / 2, entranceAxis === 'z' ? 0 : Math.PI / 2);
           putF('concrete_stone', 2.4, 0.5, 1.0, tt, 0.25, Din * 0.62);
+          // Process vessels are solid architectural equipment, not scenery
+          // the player or camera can pass through.
+          walls.push({ x: bx, z: bz, hw: 1.08, hd: 1.08, y0: 0.16, y1: 4.35 });
         }
         for (let i = 0; i < 4; i++) {
           const [px2, pz2] = worldOfF(-innerT + 0.25, Din * 0.25 + i * 1.1);
@@ -551,24 +785,69 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
         putF('concrete_stone', Wt - 2 * WALL_T, 0.18, Din * 0.32, 0, mezY - 0.09, Din * 0.80);
         flatF(-innerT, innerT, Din * 0.64, Din - WALL_T, mezY);
         camSlab(-innerT, innerT, Din * 0.64, Din - WALL_T, mezY);
-        putF('trim', Wt - 2 * WALL_T, 0.65, 0.06, 0, mezY + 0.33, Din * 0.64);
-        const runIn0 = Din * 0.64 - 3.4, runIn1 = Din * 0.64;
-        const [rcx, rcz] = worldOfF(innerT - 0.6, (runIn0 + runIn1) / 2);
-        surfaces.push({
-          kind: 'ramp', x: rcx, z: rcz,
-          hw: entranceAxis === 'z' ? 0.6 : 1.7, hd: entranceAxis === 'z' ? 1.7 : 0.6,
-          axis: entranceAxis === 'z' ? 'z' : 'x',
-          y0: es > 0 ? mezY : 0.16, y1: es > 0 ? 0.16 : mezY,
-        });
-        for (let st = 0; st < 8; st++) {
-          const t01 = (st + 0.5) / 8;
-          putF('concrete_stone', 1.2, 0.12, 0.42, innerT - 0.6, 0.16 + (mezY - 0.16) * t01, runIn0 + (runIn1 - runIn0) * t01);
+        const stairBase = 0.16;
+        const stairW = 1.2;
+        const stairT = innerT - stairW / 2;
+        const runIn0 = 0.72, runIn1 = Din * 0.64;
+        const steps = 18;
+        const tread = (runIn1 - runIn0) / steps;
+        for (let st = 0; st < steps; st++) {
+          const in0 = runIn0 + st * tread;
+          const in1 = runIn0 + (st + 1) * tread;
+          const topY = stairBase + ((mezY - stairBase) * (st + 1)) / steps;
+          const previousTop = stairBase + ((mezY - stairBase) * st) / steps;
+          const riserH = topY - previousTop;
+          putF(
+            'concrete_stone', stairW, STAIR_TREAD_THICKNESS, tread + 0.015,
+            stairT, topY - STAIR_TREAD_THICKNESS / 2, (in0 + in1) / 2,
+          );
+          putF(
+            'concrete_stone', stairW, riserH, STAIR_RISER_THICKNESS,
+            stairT, previousTop + riserH / 2, in0,
+          );
+          stairF(stairT - stairW / 2, stairT + stairW / 2, in0, in1 + 0.01, topY);
+          cameraWallF(
+            stairT - stairW / 2, stairT + stairW / 2,
+            in0, in1 + 0.01, topY - STAIR_TREAD_THICKNESS, topY,
+          );
+          cameraWallF(
+            stairT - stairW / 2, stairT + stairW / 2,
+            in0 - STAIR_RISER_THICKNESS / 2, in0 + STAIR_RISER_THICKNESS / 2,
+            previousTop, topY,
+          );
         }
-        npcF('civilian_m', Wt / 4 - 1.5, Din * 0.45, true, 2);
+        const railT0 = stairT - stairW / 2;
+        const railT1 = stairT + stairW / 2;
+        for (const railT of [railT0, railT1]) {
+          beamF('trim', [railT, stairBase + 0.94, runIn0], [railT, mezY + 0.94, runIn1], 0.04);
+          for (let st = 0; st <= steps; st += 3) {
+            const iin = runIn0 + (runIn1 - runIn0) * (st / steps);
+            const topY = stairBase + (mezY - stairBase) * (st / steps);
+            beamF('trim', [railT, topY, iin], [railT, topY + 0.92, iin], 0.028);
+          }
+          wallF(
+            railT - 0.045, railT + 0.045,
+            runIn0 + STAIR_RAIL_END_CLEARANCE, runIn1 - STAIR_RAIL_END_CLEARANCE,
+            stairBase, mezY + 1.0, false,
+          );
+        }
+        // Landing guard leaves a deliberate opening exactly the width of the flight.
+        for (const [t0, t1] of [[-innerT, railT0], [railT1, innerT]] as [number, number][]) {
+          if (t1 - t0 < 0.08) continue;
+          beamF('trim', [t0, mezY + 0.94, runIn1], [t1, mezY + 0.94, runIn1], 0.04);
+          for (const tt of [t0, t1]) {
+            beamF('trim', [tt, mezY, runIn1], [tt, mezY + 0.92, runIn1], 0.028);
+          }
+          wallF(t0, t1, runIn1 - 0.045, runIn1 + 0.045, mezY, mezY + 1.0, false);
+        }
+        npcF(`${b.id}_worker`, 'civilian_worker', Wt / 4 - 1.5, Din * 0.45, true, 2);
       } else {
         // motorpool: a car on the floor, workbench, drums, tyres, mechanic
         const [cx2, cz2] = worldOfF(-Wt / 5, Din * 0.55);
-        buildCar(bag, walls, cx2, cz2, (b.yawDeg ?? 0) + (entranceAxis === 'z' ? 0 : 90), '#6b6355');
+        buildCar(
+          bag, walls, cx2, cz2,
+          (b.yawDeg ?? 0) + (entranceAxis === 'z' ? 0 : 90), '#6b6355', 0.16,
+        );
         putF('roof', 2.6, 0.08, 0.9, innerT - 1.5, 0.98, Din - 1.4);
         for (const dtt of [-0.9, 0, 0.9]) putF('trim', 0.12, 0.9, 0.12, innerT - 1.5 + dtt, 0.5, Din - 1.4);
         putF('render_bone', 2.4, 1.2, 0.08, innerT - 1.5, 2.0, Din - 0.55);
@@ -578,7 +857,7 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
         }
         const [tx2, tz2] = worldOfF(innerT - 0.8, 1.6);
         for (let i = 0; i < 3; i++) bag.cylinder('trim', 0.34, 0.34, 0.2, 8, tx2, 0.26 + i * 0.21, tz2);
-        npcF('civilian_m', -Wt / 5 + 2.0, Din * 0.55, true, 1);
+        npcF('motorpool_mechanic', 'civilian_worker', -Wt / 5 + 2.0, Din * 0.55, true, 1);
       }
       return;
     }
@@ -627,30 +906,67 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
       const inA: [number, number] = [Din - 3.8, Din - 2.6];
       const inB: [number, number] = [Din - 2.2, Din - 1.0];
       const runT: [number, number] = [-2.2, 0.6];
-      const rampF = (inBand: [number, number], yLo: number, yHi: number, upTangent: boolean): void => {
-        const [rcx, rcz] = worldOfF((runT[0] + runT[1]) / 2, (inBand[0] + inBand[1]) / 2);
-        const hwT = (runT[1] - runT[0]) / 2, hdI = (inBand[1] - inBand[0]) / 2;
-        const lowAtMin = upTangent;
-        surfaces.push({
-          kind: 'ramp', x: rcx, z: rcz,
-          hw: entranceAxis === 'z' ? hwT : hdI,
-          hd: entranceAxis === 'z' ? hdI : hwT,
-          axis: entranceAxis === 'z' ? 'x' : 'z',
-          y0: lowAtMin ? yLo : yHi,
-          y1: lowAtMin ? yHi : yLo,
-        });
-        const steps = 7;
-        for (let st = 0; st < steps; st++) {
-          const t01 = (st + 0.5) / steps;
-          const tt = upTangent ? runT[0] + (runT[1] - runT[0]) * t01 : runT[1] - (runT[1] - runT[0]) * t01;
-          putF('concrete_stone', 0.42, 0.12, inBand[1] - inBand[0], tt, yLo + (yHi - yLo) * t01, (inBand[0] + inBand[1]) / 2);
+      const stepsPerFlight = Math.max(7, Math.round((rise / 2) / 0.17));
+      const stairFlight = (
+        inBand: [number, number],
+        yLo: number,
+        yHi: number,
+        upTangent: boolean,
+      ): void => {
+        const tread = (runT[1] - runT[0]) / stepsPerFlight;
+        for (let st = 0; st < stepsPerFlight; st++) {
+          const lowT = upTangent
+            ? runT[0] + st * tread
+            : runT[1] - (st + 1) * tread;
+          const highT = lowT + tread;
+          const topY = yLo + ((yHi - yLo) * (st + 1)) / stepsPerFlight;
+          const previousTop = yLo + ((yHi - yLo) * st) / stepsPerFlight;
+          const riserH = topY - previousTop;
+          const riserT = upTangent ? lowT : highT;
+          putF(
+            'concrete_stone', tread + 0.015, STAIR_TREAD_THICKNESS, inBand[1] - inBand[0],
+            (lowT + highT) / 2, topY - STAIR_TREAD_THICKNESS / 2,
+            (inBand[0] + inBand[1]) / 2,
+          );
+          putF(
+            'concrete_stone', STAIR_RISER_THICKNESS, riserH, inBand[1] - inBand[0],
+            riserT, previousTop + riserH / 2, (inBand[0] + inBand[1]) / 2,
+          );
+          stairF(lowT - 0.005, highT + 0.005, inBand[0], inBand[1], topY);
+          cameraWallF(
+            lowT - 0.005, highT + 0.005,
+            inBand[0], inBand[1], topY - STAIR_TREAD_THICKNESS, topY,
+          );
+          cameraWallF(
+            riserT - STAIR_RISER_THICKNESS / 2,
+            riserT + STAIR_RISER_THICKNESS / 2,
+            inBand[0], inBand[1], previousTop, topY,
+          );
+        }
+
+        const lowT = upTangent ? runT[0] : runT[1];
+        const highT = upTangent ? runT[1] : runT[0];
+        for (const railIn of inBand) {
+          beamF('trim', [lowT, yLo + 0.92, railIn], [highT, yHi + 0.92, railIn], 0.038);
+          for (let st = 0; st <= stepsPerFlight; st += 2) {
+            const ratio = st / stepsPerFlight;
+            const tt = lowT + (highT - lowT) * ratio;
+            const treadY = yLo + (yHi - yLo) * ratio;
+            beamF('trim', [tt, treadY, railIn], [tt, treadY + 0.9, railIn], 0.026);
+          }
+          wallF(
+            runT[0] + STAIR_RAIL_END_CLEARANCE,
+            runT[1] - STAIR_RAIL_END_CLEARANCE,
+            railIn - 0.04, railIn + 0.04,
+            yLo, yHi + 1.0, false,
+          );
         }
       };
-      rampF(inA, yPrev, yPrev + rise / 2, true);
+      stairFlight(inA, yPrev, yPrev + rise / 2, true);
       putF('concrete_stone', bayT1 - 0.6, 0.16, inB[1] - inA[0], (0.6 + bayT1) / 2, yPrev + rise / 2 - 0.08, (inA[0] + inB[1]) / 2);
       flatF(0.6, bayT1, inA[0], inB[1], yPrev + rise / 2);
-      rampF(inB, yPrev + rise / 2, y, false);
-      putF('trim', runT[1] - runT[0], 0.7, 0.05, (runT[0] + runT[1]) / 2, yPrev + rise * 0.3 + 0.5, inA[1] + 0.03);
+      cameraWallF(0.6, bayT1, inA[0], inB[1], yPrev + rise / 2 - 0.16, yPrev + rise / 2);
+      stairFlight(inB, yPrev + rise / 2, y, false);
 
       if (s % 2 === 1) bulb(1.4, storeyBase(s) + 2.2, Din - 2.4);
 
@@ -695,7 +1011,7 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
       }
       putF('roof', 1.6, 0.78, 0.8, -innerT + 1.4, 0.55, 2.6);
       putF('roof', 0.42, 0.5, 0.42, -innerT + 1.4, 0.3, 3.5);
-      npcF('civilian_m', -0.4, 5.2, true, 0);
+      npcF('records_clerk', 'civilian_young_m', -0.4, 5.2, true, 0);
     }
 
     if (b.open === 'station') {
@@ -730,7 +1046,7 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
         }
         wallF(-innerT, barT, in1 - 0.08, in1 + 0.08, 0, 2.7);
       }
-      npcF('militia', 0.4, 5.4, true, 0);
+      npcF('station_officer', 'militia', 0.4, 5.4, true, 0);
     }
   };
 
@@ -790,7 +1106,7 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
     }
 
     const SHOP_KINDS = ['grocery', 'hardware', 'bookshop'];
-    const KEEPERS = ['civilian_f', 'civilian_m', 'civilian_old'];
+    const KEEPERS = ['civilian_f_uncovered', 'civilian_worker', 'civilian_old'];
     for (let u = 0; u < units; u++) {
       const t0 = -Wt / 2 + u * uw, t1 = t0 + uw;
       const tc = (t0 + t1) / 2;
@@ -838,6 +1154,7 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
       putF('render_bone', 0.1, 1.8, 0.2, dispT - dispW / 2 - 0.04, 1.57, 0.12);
       putF('render_bone', 0.1, 1.8, 0.2, dispT + dispW / 2 + 0.04, 1.57, 0.12);
       putF('roof', 0.1, 2.35, 0.85, doorT + 0.42, 1.18, 0.5);          // door ajar
+      putF('trim', 0.08, 0.08, 0.11, doorT + 0.38, 1.12, 0.05);       // handle
       // fascia board + slat sign
       putF('trim', uw - 0.5, 0.62, 0.12, tc, 2.95, -0.02);
       putF('render_bone', uw * 0.55, 0.4, 0.06, tc, 2.95, -0.12);
@@ -853,7 +1170,7 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
         const light = new THREE.PointLight(0xffeec4, 13, 9, 2);
         light.position.set(lxw, 2.5, lzw);
         lights.push(light);
-        putF('render_bone', 0.14, 0.14, 0.14, tt, 2.86, iin);
+        putF('light_glow', 0.14, 0.14, 0.14, tt, 2.86, iin);
       };
       bulbAt(tc, SHOP_D * 0.45);
       putF('roof', uw * 0.62, 0.95, 0.55, tc, 0.63, SHOP_D * 0.62);    // counter
@@ -885,7 +1202,10 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
       let keeperYaw: number;
       if (entranceAxis === 'z') keeperYaw = es > 0 ? 0 : 180;
       else keeperYaw = es > 0 ? 90 : 270;
-      npcs.push({ archetype: KEEPERS[u % 3]!, pos: [kx, kz], y: 0.16, yawDeg: keeperYaw, coatIndex: u });
+      npcs.push({
+        id: `${kind}_keeper`, archetype: KEEPERS[u % 3]!,
+        pos: [kx, kz], y: 0.16, yawDeg: keeperYaw, coatIndex: u,
+      });
     }
   };
 
@@ -983,7 +1303,7 @@ function backdrop(bag: KitBag, walls: WallBox[], map: MapData): void {
 
 // ------------------------------------------------------------- furniture
 function furniture(ctx: BuildCtx, map: MapData): void {
-  const { bag, walls } = ctx;
+  const { bag, walls, lights } = ctx;
   const L = map.lamps;
   let lampIndex = 0;
   for (const x of L.xs) {
@@ -991,8 +1311,17 @@ function furniture(ctx: BuildCtx, map: MapData): void {
       const rand = mulberry32(7000 + lampIndex++);
       const jz = z + (rand() - 0.5) * 5;
       const lean = (rand() - 0.5) * 0.05;
-      bag.cylinder('trim', 0.12, 0.16, 7, 6, x, 3.5, jz, lean);
-      bag.box('trim', 0.9, 0.35, 0.5, x + lean * 7, 7.1, jz);
+      const baseY = placementBaseY(map, x, jz);
+      const isLit = lampIndex % 4 === 0;
+      bag.cylinder('trim', 0.12, 0.16, 7, 6, x, baseY + 3.5, jz, lean);
+      bag.box('trim', 0.9, 0.35, 0.5, x + lean * 7, baseY + 7.1, jz);
+      bag.box(isLit ? 'light_glow' : 'glass', 0.62, 0.22, 0.06, x + lean * 7, baseY + 7.06, jz - 0.27);
+      if (isLit) {
+        const light = new THREE.PointLight(0xffc77c, 7, 8.5, 2);
+        light.position.set(x + lean * 7, baseY + 6.85, jz);
+        lights.push(light);
+      }
+      walls.push({ x, z: jz, hw: 0.17, hd: 0.17, y0: baseY, y1: baseY + 2.2 });
     }
   }
   // telegraph poles with sagging wires along the cross streets: two kinked
@@ -1002,9 +1331,11 @@ function furniture(ctx: BuildCtx, map: MapData): void {
     const [px, pz] = poles[i]!;
     const rand = mulberry32(7700 + i);
     const lean = (rand() - 0.5) * 0.04;
-    bag.cylinder('bark', 0.09, 0.12, 6.5, 6, px, 3.25, pz, lean);
-    bag.box('bark', 1.3, 0.09, 0.09, px, 6.1, pz);
-    bag.box('bark', 1.0, 0.08, 0.08, px, 5.7, pz);
+    const baseY = placementBaseY(map, px, pz);
+    bag.cylinder('bark', 0.09, 0.12, 6.5, 6, px, baseY + 3.25, pz, lean);
+    bag.box('bark', 1.3, 0.09, 0.09, px, baseY + 6.1, pz);
+    bag.box('bark', 1.0, 0.08, 0.08, px, baseY + 5.7, pz);
+    walls.push({ x: px, z: pz, hw: 0.14, hd: 0.14, y0: baseY, y1: baseY + 2.2 });
     const next = poles[i + 1];
     if (next && Math.hypot(next[0] - px, next[1] - pz) < 26) {
       const mx = (px + next[0]) / 2, mz = (pz + next[1]) / 2;
@@ -1044,6 +1375,17 @@ function furniture(ctx: BuildCtx, map: MapData): void {
     const y = Math.abs(x) <= 13 ? 0.24 : 0.03;
     bag.cylinder('trim', 0.5, 0.5, 0.04, 12, x, y, z);
   }
+  // Storm drains sit against the curb at intervals, with actual recessed
+  // slats rather than a single painted rectangle.
+  for (const side of [-1, 1]) {
+    for (const z of [-64, -30, 4, 38, 70]) {
+      const x = side * 13.15;
+      bag.box('trim', 0.72, 0.035, 0.34, x, 0.235, z);
+      for (let sl = -3; sl <= 3; sl++) {
+        bag.box('concrete_stone', 0.055, 0.015, 0.28, x + sl * 0.09, 0.254, z);
+      }
+    }
+  }
   for (const rd of map.roadDashes) {
     const dx = rd.to[0] - rd.from[0], dz = rd.to[1] - rd.from[1];
     const ln = Math.hypot(dx, dz);
@@ -1061,43 +1403,165 @@ function furniture(ctx: BuildCtx, map: MapData): void {
   }
   for (let i = 0; i < map.trees.length; i++) {
     const rand = mulberry32(9000 + i);
-    const x = map.trees[i]![0] + (rand() - 0.5) * 3;
-    const z = map.trees[i]![1] + (rand() - 0.5) * 3;
-    const th = 3.4 + rand() * 2.0;
-    bag.cylinder('bark', 0.09, 0.15, th, 5, x, th / 2, z, (rand() - 0.5) * 0.08);
-    const nb = 3 + Math.floor(rand() * 3);
+    // Keep authored street-tree positions legible; variation is under a
+    // metre so a crown never wanders into the carriageway or architecture.
+    const x = map.trees[i]![0] + (rand() - 0.5) * 1.6;
+    const z = map.trees[i]![1] + (rand() - 0.5) * 1.6;
+    const baseY = placementBaseY(map, x, z);
+    const th = 4.6 + rand() * 1.8;
+    const trunkTop = baseY + th;
+    const trunkRadius = 0.16 + rand() * 0.07;
+    bag.cylinder(
+      'bark', trunkRadius * 0.62, trunkRadius, th, 7,
+      x, baseY + th / 2, z, (rand() - 0.5) * 0.045,
+    );
+    const nb = 5 + Math.floor(rand() * 3);
+    const branchEnds: THREE.Vector3[] = [];
     for (let k = 0; k < nb; k++) {
       const a = rand() * Math.PI * 2;
-      const tilt = 0.5 + rand() * 0.6;
-      const bl = 1.2 + rand() * 1.3;
-      const g = new THREE.BoxGeometry(0.05, bl, 0.05);
-      g.translate(0, bl / 2, 0);
-      g.rotateZ(tilt);
-      g.rotateY(a);
-      g.translate(x, th - 0.4 - rand() * 0.8, z);
-      bag.add('bark', g);
+      const reach = 0.9 + rand() * 1.25;
+      const from = new THREE.Vector3(
+        x, baseY + th * (0.57 + rand() * 0.24), z,
+      );
+      const to = new THREE.Vector3(
+        x + Math.cos(a) * reach,
+        from.y + 0.55 + rand() * 1.25,
+        z + Math.sin(a) * reach,
+      );
+      bag.beam('bark', trunkRadius * (0.22 + rand() * 0.10), from, to, 6);
+      branchEnds.push(to);
+    }
+
+    // Five-to-eight overlapping leaf masses make an irregular crown. The
+    // muted dry variant stops the avenue reading as uniformly green or lush.
+    bag.foliageCluster(
+      i % 4 === 0 ? 'foliage_dry' : 'foliage_olive',
+      1.65 + rand() * 0.55, 1.45 + rand() * 0.55,
+      x, trunkTop + 0.35, z, rand() * Math.PI,
+    );
+    for (let k = 0; k < branchEnds.length; k++) {
+      const end = branchEnds[k]!;
+      const mat = ((i + k) % 6 === 0) ? 'foliage_dry' : 'foliage_olive';
+      bag.foliageCluster(
+        mat,
+        1.05 + rand() * 0.55,
+        0.9 + rand() * 0.5,
+        end.x + (rand() - 0.5) * 0.45,
+        end.y + 0.18 + rand() * 0.45,
+        end.z + (rand() - 0.5) * 0.45,
+        rand() * Math.PI,
+      );
+      // A smaller offset spray breaks up each branch-end silhouette and lets
+      // glimpses of branch structure remain visible through the crown.
+      bag.foliageCluster(
+        mat,
+        0.72 + rand() * 0.42,
+        0.72 + rand() * 0.42,
+        end.x + (rand() - 0.5) * 0.95,
+        end.y + 0.3 + (rand() - 0.5) * 0.75,
+        end.z + (rand() - 0.5) * 0.95,
+        rand() * Math.PI,
+      );
+    }
+
+    // A small cut-out/soil patch grounds selected street trees. Sparse weeds
+    // appear only at some bases so neglect is suggested rather than painted
+    // uniformly across the district.
+    const pit = new THREE.CircleGeometry(0.72 + rand() * 0.18, 12);
+    pit.rotateX(-Math.PI / 2);
+    pit.translate(x, baseY + 0.008, z);
+    bag.add('soil', pit);
+    if (i % 3 === 0) {
+      const weeds = 3 + Math.floor(rand() * 4);
+      for (let w = 0; w < weeds; w++) {
+        const wa = rand() * Math.PI * 2;
+        const wr = 0.32 + rand() * 0.4;
+        bag.foliageCluster(
+          w % 4 === 0 ? 'foliage_dry' : 'foliage_olive',
+          0.18 + rand() * 0.12, 0.34 + rand() * 0.18,
+          x + Math.cos(wa) * wr, baseY + 0.13, z + Math.sin(wa) * wr, wa,
+        );
+      }
+    }
+    walls.push({ x, z, hw: trunkRadius + 0.05, hd: trunkRadius + 0.05, y0: baseY, y1: baseY + 2.2 });
+  }
+
+  // Low shrubs belong only to quiet verge pockets beside existing trees.
+  // They reuse the same merged foliage draw calls and need no new colliders.
+  for (let i = 2; i < map.trees.length; i += 6) {
+    const rand = mulberry32(9400 + i);
+    const [tx, tz] = map.trees[i]!;
+    const x = tx + (rand() < 0.5 ? -1 : 1) * (0.9 + rand() * 0.6);
+    const z = tz + (rand() - 0.5) * 1.5;
+    const baseY = placementBaseY(map, x, z);
+    const n = 2 + Math.floor(rand() * 3);
+    for (let k = 0; k < n; k++) {
+      bag.foliageCluster(
+        (i + k) % 5 === 0 ? 'foliage_dry' : 'foliage_olive',
+        0.75 + rand() * 0.4, 0.6 + rand() * 0.35,
+        x + (rand() - 0.5) * 0.65, baseY + 0.35, z + (rand() - 0.5) * 0.65,
+        rand() * Math.PI,
+      );
     }
   }
   for (const bn of map.benches) {
     const ry = (bn.yawDeg * Math.PI) / 180;
-    bag.box('roof', 1.8, 0.07, 0.5, bn.pos[0], 0.45, bn.pos[1], ry);
-    bag.box('roof', 1.8, 0.45, 0.06, bn.pos[0] + Math.sin(ry) * 0.24, 0.75, bn.pos[1] + Math.cos(ry) * 0.24, ry);
-    bag.box('trim', 1.6, 0.42, 0.42, bn.pos[0], 0.21, bn.pos[1], ry);
+    const baseY = placementBaseY(map, bn.pos[0], bn.pos[1]);
+    bag.box('roof', 1.8, 0.07, 0.5, bn.pos[0], baseY + 0.45, bn.pos[1], ry);
+    bag.box('roof', 1.8, 0.45, 0.06, bn.pos[0] + Math.sin(ry) * 0.24, baseY + 0.75, bn.pos[1] + Math.cos(ry) * 0.24, ry);
+    bag.box('trim', 1.6, 0.42, 0.42, bn.pos[0], baseY + 0.21, bn.pos[1], ry);
+    // Separate seat/back slats stop the bench reading as two solid blocks.
+    for (const off of [-0.16, 0, 0.16]) {
+      bag.box('planks', 1.72, 0.035, 0.12,
+        bn.pos[0] - Math.sin(ry) * off, baseY + 0.49,
+        bn.pos[1] - Math.cos(ry) * off, ry);
+    }
+    const [hw, hd] = rotatedHalfExtents(0.95, 0.38, ry);
+    walls.push({ x: bn.pos[0], z: bn.pos[1], hw, hd, y0: baseY, y1: baseY + 0.95 });
   }
   for (const k of map.kiosks) {
     const ry = (k.yawDeg * Math.PI) / 180;
-    bag.box('render_sage', 2.4, 2.5, 2.0, k.pos[0], 1.25, k.pos[1], ry, true);
-    bag.box('roof', 2.8, 0.18, 2.4, k.pos[0], 2.6, k.pos[1], ry);
-    bag.box('trim', 1.6, 0.8, 0.1, k.pos[0] - Math.sin(ry) * 1.01, 1.5, k.pos[1] - Math.cos(ry) * 1.01, ry);
-    walls.push({ x: k.pos[0], z: k.pos[1], hw: 1.3, hd: 1.1, y0: 0, y1: 2.6 });
+    const baseY = placementBaseY(map, k.pos[0], k.pos[1]);
+    bag.box('render_sage', 2.4, 2.5, 2.0, k.pos[0], baseY + 1.25, k.pos[1], ry, true);
+    bag.box('roof', 2.8, 0.18, 2.4, k.pos[0], baseY + 2.6, k.pos[1], ry);
+    bag.box('trim', 1.6, 0.8, 0.1, k.pos[0] - Math.sin(ry) * 1.01, baseY + 1.5, k.pos[1] - Math.cos(ry) * 1.01, ry);
+    const [hw, hd] = rotatedHalfExtents(1.3, 1.1, ry);
+    walls.push({ x: k.pos[0], z: k.pos[1], hw, hd, y0: baseY, y1: baseY + 2.6 });
   }
-  for (const [x, z] of map.bins) bag.cylinder('rust_metal', 0.26, 0.24, 0.75, 8, x, 0.38, z);
+  for (const [x, z] of map.bins) {
+    const baseY = placementBaseY(map, x, z);
+    bag.cylinder('rust_metal', 0.26, 0.24, 0.75, 8, x, baseY + 0.375, z);
+    bag.cylinder('trim', 0.29, 0.29, 0.055, 8, x, baseY + 0.78, z);
+    bag.box('trim', 0.22, 0.045, 0.07, x, baseY + 0.84, z);
+    walls.push({ x, z, hw: 0.28, hd: 0.28, y0: baseY, y1: baseY + 0.75 });
+  }
   for (const bd of map.boards) {
     const ry = (bd.yawDeg * Math.PI) / 180;
+    const baseY = placementBaseY(map, bd.pos[0], bd.pos[1]);
     for (const s of [-0.7, 0.7]) {
-      bag.box('trim', 0.08, 2.0, 0.08, bd.pos[0] + Math.cos(ry) * s, 1.0, bd.pos[1] - Math.sin(ry) * s, ry);
+      bag.box('trim', 0.08, 2.0, 0.08, bd.pos[0] + Math.cos(ry) * s, baseY + 1.0, bd.pos[1] - Math.sin(ry) * s, ry);
     }
-    bag.box('render_bone', 1.7, 1.1, 0.06, bd.pos[0], 1.55, bd.pos[1], ry);
+    bag.box('render_bone', 1.7, 1.1, 0.06, bd.pos[0], baseY + 1.55, bd.pos[1], ry);
+    // Layered, uneven notices give the board a human use-history. Their
+    // slightly different depths avoid z-fighting and create paper edges.
+    for (let p = 0; p < 6; p++) {
+      const col = p % 3, row = Math.floor(p / 3);
+      const ox = -0.53 + col * 0.53 + (p % 2) * 0.035;
+      const px = bd.pos[0] + Math.cos(ry) * ox - Math.sin(ry) * 0.045;
+      const pz = bd.pos[1] - Math.sin(ry) * ox - Math.cos(ry) * 0.045;
+      bag.box(
+        p === 4 ? 'state_red' : (p % 2 ? 'fabric_bone' : 'render_bone'),
+        0.34 + (p % 2) * 0.08, 0.34 + (p % 3) * 0.06, 0.018,
+        px, baseY + 1.35 + row * 0.43, pz, ry,
+      );
+      for (let line = 0; line < 3; line++) {
+        bag.box('trim', 0.23, 0.012, 0.008,
+          px, baseY + 1.28 + row * 0.43 + line * 0.065,
+          pz - Math.cos(ry) * 0.012, ry);
+      }
+    }
+    const [hw, hd] = rotatedHalfExtents(0.9, 0.08, ry);
+    walls.push({ x: bd.pos[0], z: bd.pos[1], hw, hd, y0: baseY, y1: baseY + 2.1 });
   }
   for (const g of map.garages) {
     const ry = (g.yawDeg * Math.PI) / 180;
@@ -1122,22 +1586,36 @@ function furniture(ctx: BuildCtx, map: MapData): void {
     bag.box('concrete_stone', 0.45, 0.12, ln + 0.1, cx, wl.h + 0.06, cz, ry);
     walls.push({ x: cx, z: cz, hw: Math.abs(dx) / 2 + 0.3, hd: Math.abs(dz) / 2 + 0.3, y0: 0, y1: wl.h });
   }
-  for (const car of map.cars) buildCar(bag, walls, car.pos[0], car.pos[1], car.yawDeg, car.color);
+  for (const car of map.cars) {
+    buildCar(
+      bag, walls, car.pos[0], car.pos[1], car.yawDeg, car.color,
+      placementBaseY(map, car.pos[0], car.pos[1]),
+    );
+  }
   for (const pb of map.phoneBooths) {
     const ry = (pb.yawDeg * Math.PI) / 180;
-    bag.box('render_sage', 1.15, 2.5, 1.15, pb.pos[0], 1.25, pb.pos[1], ry, true);
-    bag.box('trim', 0.85, 1.2, 0.06, pb.pos[0] - Math.sin(ry) * 0.56, 1.5, pb.pos[1] - Math.cos(ry) * 0.56, ry);
-    bag.box('roof', 1.3, 0.12, 1.3, pb.pos[0], 2.56, pb.pos[1], ry);
-    walls.push({ x: pb.pos[0], z: pb.pos[1], hw: 0.65, hd: 0.65, y0: 0, y1: 2.6 });
+    const baseY = placementBaseY(map, pb.pos[0], pb.pos[1]);
+    bag.box('render_sage', 1.15, 2.5, 1.15, pb.pos[0], baseY + 1.25, pb.pos[1], ry, true);
+    bag.box('trim', 0.85, 1.2, 0.06, pb.pos[0] - Math.sin(ry) * 0.56, baseY + 1.5, pb.pos[1] - Math.cos(ry) * 0.56, ry);
+    bag.box('glass', 0.62, 0.85, 0.04, pb.pos[0] - Math.sin(ry) * 0.59, baseY + 1.7, pb.pos[1] - Math.cos(ry) * 0.59, ry);
+    bag.box('trim', 0.12, 0.46, 0.08, pb.pos[0] - Math.sin(ry) * 0.63, baseY + 1.28, pb.pos[1] - Math.cos(ry) * 0.63, ry);
+    bag.box('roof', 1.3, 0.12, 1.3, pb.pos[0], baseY + 2.56, pb.pos[1], ry);
+    walls.push({ x: pb.pos[0], z: pb.pos[1], hw: 0.65, hd: 0.65, y0: baseY, y1: baseY + 2.6 });
   }
   for (const [x, z] of map.postBoxes) {
-    bag.box('trim', 0.1, 1.0, 0.1, x, 0.5, z);
-    bag.box('render_sage', 0.5, 0.65, 0.32, x, 1.25, z);
+    const baseY = placementBaseY(map, x, z);
+    bag.box('trim', 0.1, 1.0, 0.1, x, baseY + 0.5, z);
+    bag.box('render_sage', 0.5, 0.65, 0.32, x, baseY + 1.25, z);
+    bag.box('trim', 0.32, 0.055, 0.03, x, baseY + 1.36, z - 0.175);
+    bag.box('render_bone', 0.23, 0.12, 0.025, x, baseY + 1.12, z - 0.178);
+    walls.push({ x, z, hw: 0.28, hd: 0.2, y0: baseY, y1: baseY + 1.6 });
   }
   for (const [x, z] of map.pumps) {
-    bag.cylinder('rust_metal', 0.16, 0.18, 1.1, 8, x, 0.55, z);
-    bag.box('rust_metal', 0.12, 0.1, 0.5, x, 0.95, z + 0.2);
-    bag.box('rust_metal', 0.06, 0.45, 0.06, x, 1.25, z - 0.06);
+    const baseY = placementBaseY(map, x, z);
+    bag.cylinder('rust_metal', 0.16, 0.18, 1.1, 8, x, baseY + 0.55, z);
+    bag.box('rust_metal', 0.12, 0.1, 0.5, x, baseY + 0.95, z + 0.2);
+    bag.box('rust_metal', 0.06, 0.45, 0.06, x, baseY + 1.25, z - 0.06);
+    walls.push({ x, z, hw: 0.2, hd: 0.28, y0: baseY, y1: baseY + 1.5 });
   }
   for (let i = 0; i < map.washing.length; i++) {
     const wsh = map.washing[i]!;
@@ -1149,22 +1627,71 @@ function furniture(ctx: BuildCtx, map: MapData): void {
     const n = 2 + Math.floor(rand() * 3);
     for (let k = 0; k < n; k++) {
       const t = (k + 0.7) / (n + 0.7);
-      const mat = rand() < 0.5 ? 'render_bone' : 'render_sage';
+      const mat = rand() < 0.5 ? 'fabric_bone' : 'fabric_sage';
       bag.box(mat, 0.03, 0.75 + rand() * 0.3, 0.55 + rand() * 0.4,
         wsh.from[0] + dx * t, 1.68, wsh.from[1] + dz * t, ry);
     }
   }
+
+  // A few bicycles create ordinary human traces without turning every
+  // pavement into clutter. Geometry is a pair of wheels, a readable diamond
+  // frame, saddle and handlebar; each remains a small physical obstacle.
+  const bicycles: [number, number, number][] = [
+    [-14.7, 27, 2], [14.8, -57, 178], [-19.2, 48, 88], [20.3, 43, 92],
+  ];
+  for (const [x, z, yawDeg] of bicycles) {
+    const ry = (yawDeg * Math.PI) / 180;
+    const baseY = placementBaseY(map, x, z);
+    const local = (lx: number, lz: number, y: number): THREE.Vector3 => new THREE.Vector3(
+      x + lx * Math.cos(ry) + lz * Math.sin(ry),
+      baseY + y,
+      z - lx * Math.sin(ry) + lz * Math.cos(ry),
+    );
+    for (const lz of [-0.68, 0.68]) {
+      const p = local(0, lz, 0.34);
+      bag.wheel('trim', 0.33, 0.045, 12, p.x, p.y, p.z, ry);
+    }
+    const rear = local(0, -0.68, 0.34);
+    const front = local(0, 0.68, 0.34);
+    const crank = local(0, -0.05, 0.34);
+    const saddle = local(0, -0.28, 0.88);
+    const head = local(0, 0.48, 0.8);
+    for (const [a, b] of [
+      [rear, crank], [crank, front], [rear, saddle], [saddle, crank],
+      [saddle, head], [head, front],
+    ] as [THREE.Vector3, THREE.Vector3][]) bag.beam('trim', 0.025, a, b, 6);
+    const seat = local(0, -0.32, 0.92);
+    bag.box('roof', 0.12, 0.05, 0.28, seat.x, seat.y, seat.z, ry);
+    const handle = local(0, 0.51, 0.92);
+    bag.box('trim', 0.58, 0.035, 0.035, handle.x, handle.y, handle.z, ry);
+    const [hw, hd] = rotatedHalfExtents(0.18, 0.88, ry);
+    walls.push({ x, z, hw, hd, y0: baseY, y1: baseY + 1.0 });
+  }
+
+  // Low utility cabinets occupy three service-side pockets, not every empty
+  // corner. Hinges and a small conduit sell their function at close range.
+  for (const [x, z, ry] of [[-13.8, -36, 0], [14.0, 8, Math.PI], [20.5, 51, Math.PI / 2]] as [number, number, number][]) {
+    const baseY = placementBaseY(map, x, z);
+    bag.box('render_sage', 0.82, 1.18, 0.38, x, baseY + 0.59, z, ry);
+    bag.box('trim', 0.035, 0.82, 0.025, x + Math.cos(ry) * 0.25, baseY + 0.6, z - Math.sin(ry) * 0.25, ry);
+    bag.cylinder('rust_metal', 0.035, 0.035, 0.9, 6, x - Math.sin(ry) * 0.25, baseY + 1.55, z - Math.cos(ry) * 0.25);
+    const [hw, hd] = rotatedHalfExtents(0.45, 0.24, ry);
+    walls.push({ x, z, hw, hd, y0: baseY, y1: baseY + 1.25 });
+  }
 }
 
-export function buildLevel(scene: THREE.Scene): LevelData {
-  const map = mapJson as unknown as MapData;
+export function buildLevel(scene: THREE.Scene, map: MapData): LevelData {
   const occluders: THREE.Object3D[] = [];
   const bag = new KitBag();
   const walls: WallBox[] = [];
+  const cameraObstacles: WallBox[] = [];
   const surfaces: Surface[] = [];
   const lights: THREE.PointLight[] = [];
   const npcs: NpcSpawn[] = [];
-  const ctx: BuildCtx = { bag, walls, surfaces, lights, npcs };
+  const dynamicDoors: Record<string, THREE.Object3D> = {};
+  const ctx: BuildCtx = {
+    scene, bag, walls, cameraObstacles, surfaces, lights, npcs, dynamicDoors,
+  };
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(map.ground.size[0], map.ground.size[1]),
@@ -1175,7 +1702,7 @@ export function buildLevel(scene: THREE.Scene): LevelData {
   scene.add(ground);
 
   for (const p of map.pavements) {
-    bag.box('kerb', p.size[0], 0.22, p.size[1], p.pos[0], 0.11, p.pos[1]);
+    bag.box('pavement', p.size[0], 0.22, p.size[1], p.pos[0], 0.11, p.pos[1]);
     bag.box('concrete_stone', p.size[0] + 0.3, 0.24, 0.35, p.pos[0], 0.12, p.pos[1] + p.size[1] / 2);
     bag.box('concrete_stone', p.size[0] + 0.3, 0.24, 0.35, p.pos[0], 0.12, p.pos[1] - p.size[1] / 2);
     bag.box('concrete_stone', 0.35, 0.24, p.size[1] + 0.3, p.pos[0] + p.size[0] / 2, 0.12, p.pos[1]);
@@ -1199,6 +1726,33 @@ export function buildLevel(scene: THREE.Scene): LevelData {
   bag.box('state_red', bw2, bh2, bd2, map.monument.pos[0], ph + 0.3 + bh2 / 2 + 0.9, map.monument.pos[1]);
 
   for (const b of map.buildings) building(ctx, b);
+
+  // Interaction landmarks: each prompt belongs to a readable physical prop,
+  // never to an invisible trigger floating in empty space.
+  {
+    const rearY = placementBaseY(map, -63.5, 65.55);
+    bag.box('trim', 1.72, 2.82, 0.11, -63.5, rearY + 1.41, 65.55);
+    bag.cylinder('trim', 0.055, 0.055, 0.09, 8, -63.0, rearY + 1.18, 65.34, Math.PI / 2);
+    bag.box('trim', 0.64, 0.22, 0.035, -63.5, rearY + 2.15, 65.35);
+
+    const directoryY = placementBaseY(map, -58, 49.7);
+    bag.box('wood_door', 1.25, 1.05, 0.07, -58, directoryY + 1.45, 49.72);
+    bag.box('fabric_bone', 1.05, 0.85, 0.025, -58, directoryY + 1.45, 49.66);
+    for (let line = 0; line < 5; line++) {
+      bag.box('trim', 0.72 - line * 0.06, 0.025, 0.018, -58.08, directoryY + 1.72 - line * 0.13, 49.63);
+    }
+
+    const satchelY = placementBaseY(map, -18, 47);
+    bag.box('fabric_sage', 0.72, 0.2, 0.46, -18, satchelY + 0.1, 47, -0.18);
+    bag.cylinder('trim', 0.035, 0.035, 0.66, 7, -18, satchelY + 0.34, 47, Math.PI / 2, 0.4);
+
+    const noticeY = placementBaseY(map, 42, -4.8);
+    bag.box('wood_door', 0.08, 1.15, 0.92, 41.91, noticeY + 1.48, -4.1);
+    bag.box('fabric_bone', 0.035, 0.95, 0.74, 41.84, noticeY + 1.48, -4.1);
+    for (let line = 0; line < 6; line++) {
+      bag.box('trim', 0.018, 0.025, 0.5 - line * 0.025, 41.81, noticeY + 1.78 - line * 0.11, -4.15);
+    }
+  }
   for (const c of map.colliders) {
     walls.push({ x: c.pos[0], z: c.pos[1], hw: c.size[0] / 2, hd: c.size[1] / 2, y0: 0, y1: BIG });
   }
@@ -1208,8 +1762,17 @@ export function buildLevel(scene: THREE.Scene): LevelData {
   bag.build(scene, occluders);
   for (const l of lights) scene.add(l);
 
+  const interactions = Object.fromEntries(
+    map.interactions.map((spot) => [spot.id, mapLocation(map, spot.at)]),
+  ) as Record<InteractionSpotId, Vec2>;
+  const staticActors: ResolvedStaticActorDef[] = map.staticActors.map(({ at, ...actor }) => ({
+    ...actor,
+    pos: mapLocation(map, at),
+  }));
+
   return {
     walls,
+    cameraObstacles,
     surfaces,
     occluders,
     npcs,
@@ -1217,5 +1780,9 @@ export function buildLevel(scene: THREE.Scene): LevelData {
     waypoints: map.waypoints,
     spawns: map.spawns,
     restricted: map.restricted,
+    ambientCast: map.ambientCast,
+    staticActors,
+    interactions,
+    dynamicDoors,
   };
 }

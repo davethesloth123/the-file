@@ -3,6 +3,7 @@
 // the luminance-normalisation line are the art direction; do not drift them.
 import * as THREE from 'three';
 import tuning from '../data/tuning.json';
+import { readRenderStats, type SceneRenderStats } from './diagnostics';
 
 export const GRADE_UNIFORM_NAMES = [
   'uSat',
@@ -150,17 +151,20 @@ export class GradePass {
     scene: THREE.Scene,
     camera: THREE.Camera,
     timeSeconds: number,
-  ): void {
+  ): SceneRenderStats {
     this.uTime.value = timeSeconds;
     const persp = camera as THREE.PerspectiveCamera;
     if (persp.isPerspectiveCamera) {
       this.uNear.value = persp.near;
       this.uFar.value = persp.far;
     }
+    renderer.info.reset();
     renderer.setRenderTarget(this.target);
     renderer.render(scene, camera);
+    const sceneStats = readRenderStats(renderer);
     renderer.setRenderTarget(null);
     renderer.render(this.postScene, this.postCamera);
+    return sceneStats;
   }
 
   reset(): void {

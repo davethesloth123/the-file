@@ -12,5 +12,8 @@ export function createRenderer(): THREE.WebGLRenderer {
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  // The grade renders a scene pass and then a fullscreen pass. Reset
+  // explicitly around the scene so diagnostics never report only the quad.
+  renderer.info.autoReset = false;
   return renderer;
 }

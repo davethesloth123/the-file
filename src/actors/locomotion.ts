@@ -44,8 +44,12 @@ export class Locomotion {
   }
 
   update(speed: number, dt: number): void {
-    const want: ClipName =
-      this.forced ?? (speed < L.idleBelow ? 'idle' : speed < L.jogAbove ? 'walk' : 'jog');
+    const gait: ClipName = speed < L.idleBelow
+      ? 'idle'
+      : this.current === 'jog' && speed > L.jogExit
+        ? 'jog'
+        : speed >= L.jogEnter ? 'jog' : 'walk';
+    const want: ClipName = this.forced ?? gait;
     if (want !== this.current) {
       const next = this.actions[want];
       const prev = this.actions[this.current];

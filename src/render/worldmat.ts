@@ -19,6 +19,21 @@ interface WorldMaterialDef {
    *  Gated to near-vertical surfaces, so floors and pavements are immune. */
   baseGrime?: number;
   baseGrimeH?: number;
+  /** Height-field strength in metres. The grayscale albedo is also used as
+   *  a very cheap browser-friendly bump source, so close surfaces catch
+   *  light without needing a second normal-map texture. */
+  bumpAmt?: number;
+  /** Restrained grazing highlight. This differentiates glass/metal/wet
+   *  surfaces from plaster and stone while preserving the toon palette. */
+  sheen?: number;
+  sheenPower?: number;
+  /** Vertex sway in metres; only foliage definitions use this. */
+  windAmt?: number;
+  alphaMap?: string;
+  alphaTest?: number;
+  doubleSided?: boolean;
+  emissive?: string;
+  emissiveIntensity?: number;
 }
 
 const DEFS = materialsJson as unknown as Record<string, WorldMaterialDef | string>;
@@ -44,8 +59,16 @@ function loadTiling(path: string): THREE.Texture {
   if (!t) {
     t = loader.load(import.meta.env.BASE_URL + path);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.magFilter = THREE.LinearFilter;
     textureCache.set(path, t);
   }
+  return t;
+}
+
+function loadCutout(path: string): THREE.Texture {
+  const t = loadTiling(path);
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return t;
 }
 
@@ -62,6 +85,14 @@ export function toonColor(hex: string): THREE.MeshToonMaterial {
 }
 
 const materialCache = new Map<string, THREE.MeshToonMaterial>();
+const animatedUniforms: { value: number }[] = [];
+
+/** One shared time update for every animated world material. Foliage remains
+ * merged by material (three draw calls for the whole district), while this
+ * supplies just enough movement to stop the canopy reading as sculpture. */
+export function updateWorldMaterials(timeSeconds: number): void {
+  for (const uniform of animatedUniforms) uniform.value = timeSeconds;
+}
 
 export function worldMaterial(name: string): THREE.MeshToonMaterial {
   let material = materialCache.get(name);
@@ -72,6 +103,11 @@ export function worldMaterial(name: string): THREE.MeshToonMaterial {
   material = new THREE.MeshToonMaterial({
     color: def.color,
     gradientMap: toonRamp(),
+    alphaMap: def.alphaMap ? loadCutout(def.alphaMap) : null,
+    alphaTest: def.alphaTest ?? 0,
+    side: def.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+    emissive: def.emissive ?? 0x000000,
+    emissiveIntensity: def.emissiveIntensity ?? 0,
   });
   const uniforms = {
     tAlbedo: { value: loadTiling(def.albedo) },
@@ -81,13 +117,33 @@ export function worldMaterial(name: string): THREE.MeshToonMaterial {
     uGrimeAmt: { value: def.grimeAmt },
     uBaseGrime: { value: def.baseGrime ?? 0 },
     uBaseGrimeH: { value: def.baseGrimeH ?? 1 },
+    uBumpAmt: { value: def.bumpAmt ?? 0 },
+    uSheen: { value: def.sheen ?? 0 },
+    uSheenPower: { value: def.sheenPower ?? 4 },
+    uTime: { value: 0 },
+    uWindAmt: { value: def.windAmt ?? 0 },
   };
+  if (def.windAmt) animatedUniforms.push(uniforms.uTime);
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nvarying vec3 vTriPos;\nvarying vec3 vTriNorm;',
+        `#include <common>
+        varying vec3 vTriPos;
+        varying vec3 vTriNorm;
+        uniform float uTime, uWindAmt;`,
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        {
+          float windMask = smoothstep(1.0, 7.5, position.y);
+          float gust = sin(uTime * 0.72 + position.x * 0.37 + position.z * 0.21)
+            + sin(uTime * 1.11 + position.z * 0.43) * 0.35;
+          transformed.x += gust * uWindAmt * windMask;
+          transformed.z += gust * uWindAmt * windMask * 0.32;
+        }`,
       )
       .replace(
         '#include <worldpos_vertex>',
@@ -103,12 +159,30 @@ export function worldMaterial(name: string): THREE.MeshToonMaterial {
         varying vec3 vTriNorm;
         uniform sampler2D tAlbedo, tGrime;
         uniform float uTexScale, uAlbedoAmt, uGrimeAmt, uBaseGrime, uBaseGrimeH;
+        uniform float uBumpAmt, uSheen, uSheenPower;
         float triSample(sampler2D t, vec3 w) {
           vec3 an = pow(abs(normalize(vTriNorm)), vec3(4.0));
           an /= (an.x + an.y + an.z);
           return texture2D(t, w.zy * uTexScale).r * an.x
                + texture2D(t, w.xz * uTexScale).r * an.y
                + texture2D(t, w.xy * uTexScale).r * an.z;
+        }`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        {
+          // Screen-space height derivatives produce a stable world-space
+          // bump normal with no UVs and no extra texture fetches/assets.
+          float h = triSample(tAlbedo, vTriPos);
+          vec3 sigmaX = dFdx(vTriPos);
+          vec3 sigmaY = dFdy(vTriPos);
+          vec3 r1 = cross(sigmaY, normal);
+          vec3 r2 = cross(normal, sigmaX);
+          float det = dot(sigmaX, r1);
+          vec3 surfaceGradient = sign(det)
+            * (dFdx(h) * r1 + dFdy(h) * r2);
+          normal = normalize(abs(det) * normal - uBumpAmt * surfaceGradient);
         }`,
       )
       .replace(
@@ -125,10 +199,23 @@ export function worldMaterial(name: string): THREE.MeshToonMaterial {
           diffuseColor.rgb *= 1.0 - uBaseGrime * wallness
             * (1.0 - smoothstep(0.0, uBaseGrimeH, vTriPos.y));
         }`,
+      )
+      .replace(
+        '#include <opaque_fragment>',
+        `{
+          // A low-energy, view-dependent finish cue. Matte surfaces leave
+          // this at zero; glass, wet asphalt and metal catch restrained light.
+          float grazing = pow(
+            1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0),
+            uSheenPower
+          );
+          outgoingLight += vec3(uSheen * grazing);
+        }
+        #include <opaque_fragment>`,
       );
   };
   // Distinct cache key per definition so three treats each as its own program.
-  material.customProgramCacheKey = () => `worldmat_${name}`;
+  material.customProgramCacheKey = () => `worldmat_v2_${name}`;
   materialCache.set(name, material);
   return material;
 }

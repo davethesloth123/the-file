@@ -1,0 +1,65 @@
+[
+  {
+    "id": "district_noticeboard", "verb": "read", "pos": [-14.2, 6],
+    "label": "interaction.noticeboard.label", "speaker": "speaker.you", "text": "interaction.noticeboard.text",
+    "effects": [{ "addFact": "district_collection_notices" }, { "setFlag": "read_noticeboard", "value": true }]
+  },
+  {
+    "id": "records_directory", "verb": "read", "pos": [-58, 49.7],
+    "label": "interaction.directory.label", "speaker": "speaker.you", "text": "interaction.directory.text",
+    "effects": [{ "addFact": "records_office_layout" }, { "setFlag": "knows_records_hours", "value": true }]
+  },
+  {
+    "id": "tram_timetable", "verb": "read", "pos": [-10.8, 62],
+    "label": "interaction.timetable.label", "speaker": "speaker.you", "text": "interaction.timetable.text",
+    "effects": [
+      { "addFact": "tram_changeover_gap" }, { "unlockRoute": "tram_workers_gate" },
+      { "setFlag": "knows_patrol_gap", "value": true }, { "discoverObjective": "learn_patrol_gap" },
+      { "tag": "interaction.read_tram_timetable" }
+    ]
+  },
+  {
+    "id": "grocery_public_door", "verb": "open", "pos": [-28.6, 12.5],
+    "label": "interaction.public_door.label", "speaker": "speaker.you", "text": "interaction.public_door.text",
+    "effects": [{ "setFlag": "opened_public_shop_door", "value": true }]
+  },
+  {
+    "id": "records_staff_door", "verb": "open", "pos": [-63.5, 65.55],
+    "label": "interaction.staff_door.open", "disabledLabel": "interaction.staff_door.locked",
+    "speaker": "speaker.you", "text": "interaction.staff_door.text",
+    "enabledWhen": { "route": "records_staff_door" },
+    "effects": [
+      { "action": "open_records_staff_door" },
+      { "setFlag": "records_staff_access", "value": true }, { "tag": "route.records_staff_door" }
+    ]
+  },
+  {
+    "id": "parked_car", "verb": "inspect", "pos": [-14.7, -4],
+    "label": "interaction.car.label", "speaker": "speaker.you", "text": "interaction.car.text",
+    "effects": [{ "addFact": "recent_station_vehicle" }, { "setFlag": "inspected_staff_car", "value": true }]
+  },
+  {
+    "id": "courtyard_bench", "verb": "inspect", "pos": [-10.7, -20],
+    "label": "interaction.bench.label", "speaker": "speaker.you", "text": "interaction.bench.text"
+  },
+  {
+    "id": "discarded_satchel", "verb": "inspect", "pos": [-18, 47],
+    "label": "interaction.satchel.label", "speaker": "speaker.you", "text": "interaction.satchel.text",
+    "once": true, "effects": [{ "addFact": "misdirected_maintenance_note" }, { "unlockRoute": "boiler_delivery_cover" }]
+  },
+  {
+    "id": "phone_directory", "verb": "use", "pos": [15.6, 44],
+    "label": "interaction.phone.label", "speaker": "speaker.you", "text": "interaction.phone.text",
+    "effects": [{ "addFact": "caretaker_extension" }, { "setFlag": "checked_phone_directory", "value": true }]
+  },
+  {
+    "id": "yard_pump", "verb": "use", "pos": [-19.5, 52],
+    "label": "interaction.pump.label", "speaker": "speaker.you", "text": "interaction.pump.text",
+    "effects": [{ "setFlag": "tested_yard_pump", "value": true }]
+  },
+  {
+    "id": "station_notice", "verb": "read", "pos": [42, -4.8],
+    "label": "interaction.station_notice.label", "speaker": "speaker.you", "text": "interaction.station_notice.text",
+    "effects": [{ "addFact": "station_visiting_hours" }, { "suspicion": 2 }]
+  }
+]

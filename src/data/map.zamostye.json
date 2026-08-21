@@ -279,7 +279,7 @@
     {
       "id": "boiler",
       "pos": [
-        -46,
+        -48,
         -72
       ],
       "size": [
@@ -297,7 +297,7 @@
       "id": "motorpool",
       "pos": [
         57,
-        51
+        52
       ],
       "size": [
         16,
@@ -424,10 +424,10 @@
     },
     {
       "pos": [
-        -34,
-        14.8
+        -16.7,
+        54
       ],
-      "yawDeg": 91,
+      "yawDeg": 178,
       "color": "#77785f"
     },
     {
@@ -576,7 +576,7 @@
     ],
     [
       -48,
-      20
+      8
     ],
     [
       46,
@@ -710,28 +710,28 @@
   "benches": [
     {
       "pos": [
-        -14.6,
+        -10.7,
         -20
       ],
       "yawDeg": 96
     },
     {
       "pos": [
-        14.6,
+        10.7,
         24
       ],
       "yawDeg": -86
     },
     {
       "pos": [
-        -14.6,
+        -10.7,
         34
       ],
       "yawDeg": 88
     },
     {
       "pos": [
-        14.6,
+        10.7,
         -48
       ],
       "yawDeg": -93
@@ -795,7 +795,7 @@
     {
       "pos": [
         -47.4,
-        -14
+        -9.6
       ],
       "yawDeg": 90
     }
@@ -803,21 +803,21 @@
   "kiosks": [
     {
       "pos": [
-        -16.5,
+        -10.8,
         62
       ],
       "yawDeg": 84
     },
     {
       "pos": [
-        16.8,
+        10.8,
         -62
       ],
       "yawDeg": -95
     },
     {
       "pos": [
-        -17,
+        -10.8,
         -30
       ],
       "yawDeg": 91
@@ -959,6 +959,14 @@
       0,
       62
     ],
+    "dead_drop": [
+      -46,
+      -9.6
+    ],
+    "exit_north": [
+      0,
+      82
+    ],
     "grigori": [
       -55,
       66
@@ -976,6 +984,103 @@
       -8
     ]
   },
+  "ambientCast": [
+    {
+      "id": "avenue_man_south",
+      "archetype": "civilian_worker",
+      "route": [[-11, 70], [-11, -40]],
+      "waits": [1.5, 3.0],
+      "startIndex": 0,
+      "height": 0.97,
+      "coatIndex": 1
+    },
+    {
+      "id": "avenue_man_north",
+      "archetype": "civilian_young_m",
+      "route": [[11, -50], [11, 40]],
+      "waits": [2.0, 0.5],
+      "startIndex": 1,
+      "speed": 2.4,
+      "height": 1.04,
+      "coatIndex": 2
+    },
+    {
+      "id": "crossing_woman",
+      "archetype": "civilian_f",
+      "route": [[-40, 6], [-11, 6]],
+      "waits": [4.0, 1.0],
+      "startIndex": 0,
+      "height": 0.98,
+      "coatIndex": 0
+    },
+    {
+      "id": "avenue_woman",
+      "archetype": "civilian_f_uncovered",
+      "route": [[11, 30], [11, -34]],
+      "waits": [0.5, 2.5],
+      "startIndex": 1,
+      "height": 1.02,
+      "coatIndex": 2
+    },
+    {
+      "id": "old_man",
+      "archetype": "civilian_old",
+      "route": [[-11, -20], [-11, 44]],
+      "waits": [5.0, 4.5],
+      "startIndex": 0,
+      "height": 1.0,
+      "coatIndex": 1
+    },
+    {
+      "id": "works_shift_worker",
+      "archetype": "civilian_worker",
+      "route": [[-58, -60], [-36, -60]],
+      "waits": [3.5, 1.0],
+      "startIndex": 0,
+      "height": 1.06,
+      "coatIndex": 0
+    },
+    {
+      "id": "park_young_woman",
+      "archetype": "civilian_f_uncovered",
+      "route": [[-61, 8], [-34, 8]],
+      "waits": [2.0, 5.0],
+      "startIndex": 1,
+      "height": 0.94,
+      "coatIndex": 1
+    },
+    {
+      "id": "shops_young_man",
+      "archetype": "civilian_young_m",
+      "route": [[-24, 37], [-8, 37]],
+      "waits": [1.0, 4.0],
+      "startIndex": 0,
+      "height": 0.98,
+      "coatIndex": 2
+    }
+  ],
+  "staticActors": [
+    {
+      "id": "grigori",
+      "archetype": "civilian_m",
+      "at": "grigori",
+      "yawDeg": 135,
+      "coatIndex": 2
+    },
+    {
+      "id": "vera",
+      "archetype": "civilian_f_uncovered",
+      "at": "vera",
+      "yawDeg": 90,
+      "coatIndex": 1
+    }
+  ],
+  "interactions": [
+    { "id": "fence", "at": "grigori" },
+    { "id": "clerk", "at": "clerk" },
+    { "id": "station", "at": "station" },
+    { "id": "vera", "at": "vera" }
+  ],
   "phoneBooths": [
     {
       "pos": [
@@ -1004,7 +1109,7 @@
   ],
   "pumps": [
     [
-      -22,
+      -19.5,
       52
     ]
   ],

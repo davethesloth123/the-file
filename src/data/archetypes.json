@@ -193,8 +193,8 @@
         "headscarf",
         "handbag"
       ],
-      "hair": null,
-      "hairColor": null,
+      "hair": "full",
+      "hairColor": "#4a4033",
       "height": 0.93,
       "moustache": false,
       "beard": false,
@@ -282,6 +282,172 @@
         "sway": 0.026,
         "headStab": 0.6,
         "elbowSwing": 4
+      }
+    }
+  },
+  "civilian_young_m": {
+    "model": "models/civilian_young_m.glb",
+    "coats": [
+      "#575958",
+      "#5f584b",
+      "#4b4943"
+    ],
+    "mesh": {
+      "shoulder": 0.96,
+      "waist": 0.96,
+      "weight": 0.94,
+      "limb": 1.02,
+      "coatHem": 0.84,
+      "coatFlare": 0.96,
+      "boots": false,
+      "stoopDeg": 0,
+      "attachments": [],
+      "hair": "full",
+      "hairColor": "#5a4635",
+      "skinColor": "#b49a7e",
+      "eyeColor": "#3a352d",
+      "height": 1.03,
+      "moustache": false,
+      "beard": false,
+      "legsColor": "#41464a",
+      "face": {
+        "jaw": 0.96,
+        "brow": 0.94,
+        "nose": 0.92,
+        "cheek": 1.06
+      },
+      "coat": {
+        "collar": "fold",
+        "lapels": true,
+        "buttons": 3,
+        "cuffs": false
+      }
+    },
+    "gait": {
+      "walk": {
+        "n": 24,
+        "dur": 0.92,
+        "swing": 37,
+        "knee": 45,
+        "arm": 23,
+        "elbow": 13,
+        "lean": 2.5,
+        "bob": 0.026,
+        "roll": 3.2,
+        "sway": 0.012
+      }
+    }
+  },
+  "civilian_worker": {
+    "model": "models/civilian_worker.glb",
+    "coats": [
+      "#55564f",
+      "#625b4d",
+      "#4e514d"
+    ],
+    "mesh": {
+      "shoulder": 1.15,
+      "waist": 1.08,
+      "weight": 1.08,
+      "limb": 1.05,
+      "coatHem": 0.86,
+      "coatFlare": 1.03,
+      "boots": true,
+      "stoopDeg": 2,
+      "attachments": [
+        "flat_cap",
+        "belt"
+      ],
+      "hair": null,
+      "hairColor": null,
+      "skinColor": "#a98f73",
+      "eyeColor": "#332f29",
+      "height": 1.02,
+      "moustache": true,
+      "beard": false,
+      "legsColor": "#3f413d",
+      "face": {
+        "jaw": 1.12,
+        "brow": 1.08,
+        "nose": 1.08,
+        "cheek": 1.08
+      },
+      "coat": {
+        "collar": "stand",
+        "lapels": false,
+        "buttons": 4,
+        "cuffs": true
+      }
+    },
+    "gait": {
+      "walk": {
+        "n": 24,
+        "dur": 1.08,
+        "swing": 34,
+        "knee": 41,
+        "arm": 17,
+        "elbow": 15,
+        "lean": 3.5,
+        "bob": 0.030,
+        "roll": 3.8,
+        "sway": 0.018,
+        "pelvisYaw": 4,
+        "shoulderYaw": 7
+      }
+    }
+  },
+  "civilian_f_uncovered": {
+    "model": "models/civilian_f_uncovered.glb",
+    "coats": [
+      "#746b5d",
+      "#68665d",
+      "#8a806d"
+    ],
+    "mesh": {
+      "shoulder": 0.84,
+      "waist": 0.94,
+      "weight": 0.96,
+      "limb": 0.95,
+      "coatHem": 0.64,
+      "coatFlare": 1.18,
+      "boots": false,
+      "stoopDeg": 0,
+      "attachments": [
+        "handbag"
+      ],
+      "hair": "full",
+      "hairColor": "#685342",
+      "skinColor": "#b89f83",
+      "eyeColor": "#443a30",
+      "height": 0.97,
+      "moustache": false,
+      "beard": false,
+      "legsColor": "#5d584f",
+      "face": {
+        "jaw": 0.90,
+        "brow": 0.92,
+        "nose": 1.04,
+        "cheek": 1.10
+      },
+      "coat": {
+        "collar": "fold",
+        "lapels": true,
+        "buttons": 4,
+        "cuffs": false
+      }
+    },
+    "gait": {
+      "walk": {
+        "n": 24,
+        "dur": 0.98,
+        "swing": 33,
+        "knee": 42,
+        "arm": 16,
+        "elbow": 16,
+        "lean": 1.8,
+        "bob": 0.028,
+        "roll": 3.8,
+        "sway": 0.017
       }
     }
   },

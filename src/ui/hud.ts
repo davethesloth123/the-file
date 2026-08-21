@@ -24,6 +24,8 @@ export interface Hud {
   setMoney(value: number): void;
   /** Kit lines bottom-right: diversion charges, pattern intel, exfil. */
   setKit(lines: { text: string; dim: boolean }[]): void;
+  notify(title: string, text: string, tone?: 'neutral' | 'good' | 'warning'): void;
+  tick(dt: number): void;
   /** End card. Fires once; the button reloads the run. */
   showEnd(title: string, body: string, colour: string, button: string): void;
 }
@@ -113,6 +115,37 @@ export function createHud(): Hud {
   objBox.append(objLabel, objDist);
   root.appendChild(objBox);
 
+  // Short-lived world and objective feedback. This is prose, not a marker:
+  // discoveries are acknowledged without turning the environment into UI.
+  const feedback = document.createElement('aside');
+  feedback.dataset.testid = 'feedback';
+  feedback.style.cssText = [
+    'position:absolute', 'left:30px', 'bottom:82px', 'max-width:430px',
+    'display:none', 'padding:11px 14px 12px', 'background:rgba(20,18,14,0.9)',
+    'border-left:2px solid rgba(222,210,184,0.45)',
+  ].join(';');
+  const feedbackTitle = document.createElement('div');
+  feedbackTitle.style.cssText = `color:#b99d68;font:700 9px ${MONO};letter-spacing:0.22em;text-transform:uppercase`;
+  const feedbackText = document.createElement('div');
+  feedbackText.style.cssText = `color:${PAPER};font:11px ${MONO};line-height:1.55;margin-top:5px`;
+  feedback.append(feedbackTitle, feedbackText);
+  root.appendChild(feedback);
+  const feedbackQueue: { title: string; text: string; tone: 'neutral' | 'good' | 'warning' }[] = [];
+  let feedbackRemaining = 0;
+  const showNextFeedback = (): void => {
+    const next = feedbackQueue.shift();
+    if (!next) {
+      feedback.style.display = 'none';
+      return;
+    }
+    feedbackTitle.textContent = next.title;
+    feedbackText.textContent = next.text;
+    feedback.style.borderLeftColor = next.tone === 'warning'
+      ? '#b8322c' : next.tone === 'good' ? '#b99d68' : 'rgba(222,210,184,0.45)';
+    feedback.style.display = 'block';
+    feedbackRemaining = Math.min(7.5, Math.max(3.2, next.text.length / 24));
+  };
+
   // bottom-centre: the action prompt — keycap in a 1px outlined box
   const promptBox = document.createElement('div');
   promptBox.style.cssText = [
@@ -172,7 +205,7 @@ export function createHud(): Hud {
     `color:rgba(222,210,184,0.30)`, `font:10px ${MONO}`, 'letter-spacing:0.18em',
     'text-align:right', 'line-height:1.9',
   ].join(';');
-  keysHint.innerHTML = 'WASD MOVE · SHIFT HURRY · DRAG LOOK<br>F ACT · G DIVERSION · V CAMERA · TAB BENCH';
+  keysHint.innerHTML = 'WASD MOVE · SHIFT HURRY · DRAG LOOK<br>E INTERACT · F LEGACY · G DIVERSION · V CAMERA';
   root.appendChild(keysHint);
 
   // kit lines above the controls hint: what Andrei is holding and knows
@@ -217,7 +250,7 @@ export function createHud(): Hud {
       objLabel.textContent = label ?? '';
       objDist.textContent = distance ?? '';
     },
-    setPrompt(label: string | null, progress: number, sub: string | null, key: string | null = 'F'): void {
+    setPrompt(label: string | null, progress: number, sub: string | null, key: string | null = 'E'): void {
       if (!label) {
         promptBox.style.display = 'none';
         return;
@@ -242,6 +275,15 @@ export function createHud(): Hud {
         el.style.color = line.dim ? 'rgba(222,210,184,0.22)' : 'rgba(222,210,184,0.55)';
         kitBox.appendChild(el);
       }
+    },
+    notify(title, text, tone = 'neutral'): void {
+      feedbackQueue.push({ title, text, tone });
+      if (feedback.style.display === 'none') showNextFeedback();
+    },
+    tick(dt): void {
+      if (feedback.style.display === 'none') return;
+      feedbackRemaining -= dt;
+      if (feedbackRemaining <= 0) showNextFeedback();
     },
     showEnd(title: string, body: string, colour: string, button: string): void {
       if (card.style.display === 'flex') return;

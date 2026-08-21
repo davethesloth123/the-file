@@ -6,25 +6,75 @@
   "objectives": [
     {
       "id": "collect",
-      "type": "hold_at",
-      "pos": [-46, -14],
-      "seconds": 2.6,
-      "conduct": "service",
-      "label": "Service the dead drop",
-      "prompt": "service the drop",
+      "label": "objective.service_dead_drop",
+      "checks": [
+        {
+          "id": "service_drop",
+          "type": "hold_at",
+          "at": "dead_drop",
+          "seconds": 2.6,
+          "conduct": "service",
+          "prompt": "prompt.service_drop",
+          "tags": ["approach.direct_drop"]
+        }
+      ],
       "onComplete": [
         { "set": "carrying", "value": true },
-        { "radio": "handler.now_carrying" }
-      ]
+        { "radio": "handler.now_carrying" },
+        { "tag": "objective.drop_serviced" }
+      ],
+      "tags": ["stage.acquisition"]
+    },
+    {
+      "id": "learn_courtyard_route",
+      "label": "objective.learn_courtyard_route",
+      "optional": true,
+      "hidden": true,
+      "marker": "none",
+      "checks": [
+        { "id": "courtyard_fact", "type": "flag", "flag": "knows_courtyard_route", "tags": ["discovery.courtyard_service_gate"] }
+      ],
+      "tags": ["optional.social_recon"]
+    },
+    {
+      "id": "learn_patrol_gap",
+      "label": "objective.learn_patrol_gap",
+      "optional": true,
+      "hidden": true,
+      "marker": "none",
+      "checks": [
+        { "id": "patrol_fact", "type": "flag", "flag": "knows_patrol_gap", "tags": ["discovery.avenue_patrol_gap"] }
+      ],
+      "tags": ["optional.social_recon"]
+    },
+    {
+      "id": "learn_staff_route",
+      "label": "objective.learn_staff_route",
+      "optional": true,
+      "hidden": true,
+      "marker": "none",
+      "checks": [
+        { "id": "staff_fact", "type": "flag", "flag": "knows_staff_route", "tags": ["discovery.records_staff_door"] }
+      ],
+      "tags": ["optional.social_recon"]
     },
     {
       "id": "exit",
-      "type": "reach",
-      "pos": [0, 82],
-      "label": "Clear the district",
-      "revealIf": { "confidence": ">=33" }
+      "label": "objective.clear_district",
+      "availableWhen": { "objective": "collect", "status": "completed" },
+      "checks": [
+        {
+          "id": "north_gate",
+          "type": "reach",
+          "at": "exit_north",
+          "tags": ["exit.north_gate"]
+        }
+      ],
+      "revealIf": { "confidence": ">=33" },
+      "tags": ["stage.exfiltration"]
     }
   ],
+  "completeWhen": { "objective": "exit", "status": "completed" },
   "fail": [
     { "when": "file>=100", "ending": "burned" }
   ]

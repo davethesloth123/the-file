@@ -5,15 +5,15 @@
 import tuning from '../data/tuning.json';
 import { canSee } from '../systems/observation';
 import type { CollisionWorld } from '../world/collision';
+import { NpcAttention, type AttentionState } from './attention';
 
-const V = tuning.vision;
 const P = tuning.patrol;
+const A = tuning.npcAttention;
 
 export class Patrol {
   x: number; z: number; yaw = 0;
   px: number; pz: number; pyaw = 0;
-  alert = 0;
-  private lostFor = Infinity;
+  readonly attention = new NpcAttention();
   private targetIndex = 1;
   /** actual ground speed this step, for the locomotion blend */
   currentSpeed = 0;
@@ -22,6 +22,9 @@ export class Patrol {
   /** a diversion: walk toward the noise instead of the beat, briefly */
   private probe: [number, number] | null = null;
   private probeT = 0;
+
+  get alert(): number { return this.attention.concern; }
+  get attentionState(): AttentionState { return this.attention.state; }
 
   /** Send the patrol to investigate a noise for `seconds`. */
   investigate(x: number, z: number, seconds: number): void {
@@ -47,16 +50,32 @@ export class Patrol {
     const ox = this.x, oz = this.z;
 
     const sees = canSee(this, targetX, targetZ, world);
-    if (sees) {
-      this.alert = Math.min(1, this.alert + dt * V.alertRise);
-      this.lostFor = 0;
-    } else {
-      this.lostFor += dt;
-      if (this.lostFor > V.loseTime) this.alert = Math.max(0, this.alert - dt * V.alertFall);
-    }
+    const targetDistance = Math.hypot(targetX - this.x, targetZ - this.z);
+    const attentionState = this.attention.step(dt, {
+      seesPlayer: sees,
+      unusualConduct: conductActive,
+      distance: targetDistance,
+      playerX: targetX,
+      playerZ: targetZ,
+    });
 
-    if (sees && conductActive && this.alert > P.alertFaceThreshold) {
-      // stop and watch — the beat can wait
+    if (sees && conductActive && attentionState === 'approaching'
+      && targetDistance > A.questionDistance) {
+      const dx = targetX - this.x;
+      const dz = targetZ - this.z;
+      const speed = this.speed * this.speedFactor;
+      const [nextX, nextZ] = world.resolve(
+        this.x + (dx / targetDistance) * speed * dt,
+        this.z + (dz / targetDistance) * speed * dt,
+        0,
+      );
+      this.x = nextX;
+      this.z = nextZ;
+      const want = Math.atan2(dx, dz);
+      const turn = ((want - this.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+      this.yaw += turn * Math.min(1, dt * P.faceRate);
+    } else if (sees && conductActive && this.alert > P.alertFaceThreshold) {
+      // Stop to watch or question. Ordinary presence never interrupts the beat.
       const want = Math.atan2(targetX - this.x, targetZ - this.z);
       const turn = ((want - this.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
       this.yaw += turn * Math.min(1, dt * P.faceRate);

@@ -1,0 +1,351 @@
+[
+  {
+    "id": "grigori_street",
+    "npcId": "grigori",
+    "prompt": "dialogue.grigori.prompt",
+    "role": "fence_contact",
+    "location": "north_service_yard",
+    "activity": "waiting",
+    "start": "greeting",
+    "refusalNode": "refuse",
+    "availableWhen": { "all": [
+      { "context": "role", "equals": "fence_contact" },
+      { "context": "activity", "equals": "waiting" },
+      { "suspicion": "<65" }
+    ] },
+    "nodes": {
+      "greeting": {
+        "speaker": "speaker.grigori",
+        "text": "dialogue.grigori.greeting",
+        "responses": [
+          { "id": "work", "text": "dialogue.response.work", "next": "work", "when": { "not": { "flag": "parcel" } } },
+          { "id": "route", "text": "dialogue.response.quiet_route", "next": "route", "when": { "choice": { "dialogue": "grigori_street", "response": "route", "chosen": false } } },
+          { "id": "leave", "text": "dialogue.response.leave", "next": null }
+        ]
+      },
+      "work": {
+        "speaker": "speaker.grigori",
+        "text": "dialogue.grigori.work",
+        "responses": [
+          { "id": "take_run", "text": "dialogue.response.take_run", "next": null, "effects": [{ "action": "take_courier" }, { "tag": "dialogue.accepted_courier" }] },
+          { "id": "decline", "text": "dialogue.response.not_today", "next": null }
+        ]
+      },
+      "route": {
+        "speaker": "speaker.grigori",
+        "text": "dialogue.grigori.route",
+        "effects": [
+          { "addFact": "courtyard_delivery_hours" },
+          { "unlockRoute": "courtyard_service_gate" },
+          { "setFlag": "knows_courtyard_route", "value": true },
+          { "discoverObjective": "learn_courtyard_route" },
+          { "suspicion": 3 }
+        ],
+        "responses": [{ "id": "route", "text": "dialogue.response.understood", "next": null }]
+      },
+      "refuse": {
+        "speaker": "speaker.grigori",
+        "text": "dialogue.grigori.refuse",
+        "responses": [{ "id": "leave", "text": "dialogue.response.leave", "next": null }]
+      }
+    }
+  },
+  {
+    "id": "vera_window",
+    "npcId": "vera",
+    "prompt": "dialogue.vera.prompt",
+    "role": "local_contact",
+    "location": "west_courtyard",
+    "activity": "watching_avenue",
+    "start": "greeting",
+    "refusalNode": "refuse",
+    "availableWhen": { "suspicion": "<58" },
+    "nodes": {
+      "greeting": {
+        "speaker": "speaker.vera",
+        "text": "dialogue.vera.greeting",
+        "responses": [
+          { "id": "patrol", "text": "dialogue.response.ask_patrol", "next": "patrol", "when": { "choice": { "dialogue": "vera_window", "response": "patrol", "chosen": false } } },
+          { "id": "pry", "text": "dialogue.response.ask_why_here", "next": "pry" },
+          { "id": "leave", "text": "dialogue.response.leave", "next": null }
+        ]
+      },
+      "patrol": {
+        "speaker": "speaker.vera",
+        "text": "dialogue.vera.patrol",
+        "effects": [
+          { "action": "slow_patrols" }, { "addFact": "avenue_turn_timing" },
+          { "setFlag": "knows_patrol_gap", "value": true },
+          { "discoverObjective": "learn_patrol_gap" }, { "tag": "dialogue.vera_timing" }
+        ],
+        "responses": [{ "id": "patrol", "text": "dialogue.response.understood", "next": null }]
+      },
+      "pry": {
+        "speaker": "speaker.vera",
+        "text": "dialogue.vera.pry",
+        "effects": [{ "suspicion": 14 }, { "setFlag": "pried_into_vera", "value": true }],
+        "responses": [{ "id": "apologise", "text": "dialogue.response.apologise", "next": null }]
+      },
+      "refuse": {
+        "speaker": "speaker.vera",
+        "text": "dialogue.vera.refuse",
+        "responses": [{ "id": "leave", "text": "dialogue.response.leave", "next": null }]
+      }
+    }
+  },
+  {
+    "id": "records_counter",
+    "npcId": "records_clerk",
+    "prompt": "dialogue.clerk.prompt",
+    "role": "records_clerk",
+    "location": "records_office",
+    "activity": "working",
+    "start": "counter",
+    "refusalNode": "refuse",
+    "availableWhen": { "all": [{ "suspicion": "<55" }, { "not": { "flag": "clerk_alarm" } }] },
+    "nodes": {
+      "counter": {
+        "speaker": "speaker.clerk",
+        "text": "dialogue.clerk.counter",
+        "responses": [
+          { "id": "hours", "text": "dialogue.response.ask_hours", "next": "hours", "when": { "choice": { "dialogue": "records_counter", "response": "hours", "chosen": false } } },
+          { "id": "repairs", "text": "dialogue.response.repairs_cover", "next": "staff_route", "when": { "suspicion": "<28" } },
+          { "id": "pay", "text": "dialogue.response.pay_file", "next": "paid" },
+          { "id": "bad", "text": "dialogue.response.no_questions", "next": "alarm" },
+          { "id": "leave", "text": "dialogue.response.leave", "next": null }
+        ]
+      },
+      "hours": {
+        "speaker": "speaker.clerk",
+        "text": "dialogue.clerk.hours",
+        "effects": [{ "addFact": "records_closing_time" }],
+        "responses": [{ "id": "hours", "text": "dialogue.response.thanks", "next": null }]
+      },
+      "staff_route": {
+        "speaker": "speaker.clerk",
+        "text": "dialogue.clerk.staff_route",
+        "effects": [
+          { "suspicion": 5 }, { "addFact": "records_staff_door" },
+          { "unlockRoute": "records_staff_door" },
+          { "setFlag": "knows_staff_route", "value": true },
+          { "discoverObjective": "learn_staff_route" }
+        ],
+        "responses": [{ "id": "repairs", "text": "dialogue.response.thanks", "next": null }]
+      },
+      "paid": {
+        "speaker": "speaker.clerk",
+        "text": "dialogue.clerk.paid",
+        "effects": [{ "action": "pay_clerk" }],
+        "responses": [{ "id": "paid", "text": "dialogue.response.leave", "next": null }]
+      },
+      "alarm": {
+        "speaker": "speaker.clerk",
+        "text": "dialogue.clerk.alarm",
+        "effects": [{ "suspicion": 30 }, { "setFlag": "clerk_alarm", "value": true }, { "tag": "dialogue.clerk_alarmed" }],
+        "responses": [{ "id": "leave", "text": "dialogue.response.leave", "next": null }]
+      },
+      "refuse": {
+        "speaker": "speaker.clerk",
+        "text": "dialogue.clerk.refuse",
+        "responses": [{ "id": "leave", "text": "dialogue.response.leave", "next": null }]
+      }
+    }
+  },
+  {
+    "id": "station_desk_conversation",
+    "npcId": "station_officer",
+    "prompt": "dialogue.officer.prompt",
+    "role": "duty_officer",
+    "location": "militia_station",
+    "activity": "on_duty",
+    "start": "desk",
+    "refusalNode": "refuse",
+    "availableWhen": { "suspicion": "<70" },
+    "nodes": {
+      "desk": {
+        "speaker": "speaker.officer",
+        "text": "dialogue.officer.desk",
+        "responses": [
+          { "id": "directions", "text": "dialogue.response.ask_directions", "next": "directions" },
+          { "id": "vera", "text": "dialogue.response.mention_vera", "next": "vera", "when": { "flag": "pried_into_vera" } },
+          { "id": "loiter", "text": "dialogue.response.just_looking", "next": "watch" },
+          { "id": "leave", "text": "dialogue.response.leave", "next": null }
+        ]
+      },
+      "directions": {
+        "speaker": "speaker.officer",
+        "text": "dialogue.officer.directions",
+        "effects": [{ "suspicion": -4 }, { "addFact": "station_public_hours" }],
+        "responses": [{ "id": "thanks", "text": "dialogue.response.thanks", "next": null }]
+      },
+      "vera": {
+        "speaker": "speaker.officer",
+        "text": "dialogue.officer.vera",
+        "responses": [
+          { "id": "inform", "text": "dialogue.response.confirm_vera", "next": null, "effects": [{ "action": "inform_station" }, { "tag": "dialogue.informed_on_vera" }] },
+          { "id": "retract", "text": "dialogue.response.retract", "next": null, "effects": [{ "suspicion": 10 }] }
+        ]
+      },
+      "watch": {
+        "speaker": "speaker.officer",
+        "text": "dialogue.officer.watch",
+        "effects": [{ "suspicion": 24 }, { "setFlag": "station_watch", "value": true }, { "tag": "dialogue.station_watch" }],
+        "responses": [{ "id": "leave", "text": "dialogue.response.leave", "next": null }]
+      },
+      "refuse": {
+        "speaker": "speaker.officer",
+        "text": "dialogue.officer.refuse",
+        "responses": [{ "id": "leave", "text": "dialogue.response.leave", "next": null }]
+      }
+    }
+  },
+  {
+    "id": "grocery_counter",
+    "npcId": "grocery_keeper",
+    "prompt": "dialogue.grocery.prompt",
+    "role": "shopkeeper",
+    "location": "grocery",
+    "activity": "serving",
+    "start": "hello",
+    "refusalNode": "refuse",
+    "availableWhen": { "suspicion": "<52" },
+    "nodes": {
+      "hello": {
+        "speaker": "speaker.shopkeeper",
+        "text": "dialogue.grocery.hello",
+        "responses": [
+          { "id": "hours", "text": "dialogue.response.ask_hours", "next": "hours" },
+          { "id": "delivery", "text": "dialogue.response.ask_deliveries", "next": "delivery", "when": { "suspicion": "<30" } },
+          { "id": "leave", "text": "dialogue.response.leave", "next": null }
+        ]
+      },
+      "hours": {
+        "speaker": "speaker.shopkeeper",
+        "text": "dialogue.grocery.hours",
+        "effects": [{ "addFact": "grocery_closing_time" }],
+        "responses": [{ "id": "thanks", "text": "dialogue.response.thanks", "next": null }]
+      },
+      "delivery": {
+        "speaker": "speaker.shopkeeper",
+        "text": "dialogue.grocery.delivery",
+        "effects": [{ "suspicion": 4 }, { "addFact": "bakery_delivery_gap" }, { "unlockRoute": "bakery_yard" }, { "setFlag": "knows_bakery_yard", "value": true }],
+        "responses": [{ "id": "delivery", "text": "dialogue.response.thanks", "next": null }]
+      },
+      "refuse": {
+        "speaker": "speaker.shopkeeper",
+        "text": "dialogue.shop.refuse",
+        "responses": [{ "id": "leave", "text": "dialogue.response.leave", "next": null }]
+      }
+    }
+  },
+  {
+    "id": "hardware_counter",
+    "npcId": "hardware_keeper",
+    "prompt": "dialogue.hardware.prompt",
+    "role": "shopkeeper",
+    "location": "hardware_shop",
+    "activity": "stocking",
+    "start": "hello",
+    "nodes": {
+      "hello": {
+        "speaker": "speaker.shopkeeper",
+        "text": "dialogue.hardware.hello",
+        "responses": [
+          { "id": "caretaker", "text": "dialogue.response.ask_caretaker", "next": "caretaker" },
+          { "id": "pipe", "text": "dialogue.response.ask_pipe", "next": "pipe" },
+          { "id": "leave", "text": "dialogue.response.leave", "next": null }
+        ]
+      },
+      "caretaker": {
+        "speaker": "speaker.shopkeeper",
+        "text": "dialogue.hardware.caretaker",
+        "effects": [{ "addFact": "caretaker_name" }, { "setFlag": "knows_caretaker_name", "value": true }],
+        "responses": [{ "id": "caretaker", "text": "dialogue.response.thanks", "next": null }]
+      },
+      "pipe": {
+        "speaker": "speaker.shopkeeper",
+        "text": "dialogue.hardware.pipe",
+        "effects": [{ "suspicion": -2 }],
+        "responses": [{ "id": "pipe", "text": "dialogue.response.thanks", "next": null }]
+      }
+    }
+  },
+  {
+    "id": "motorpool_floor",
+    "npcId": "motorpool_mechanic",
+    "prompt": "dialogue.mechanic.prompt",
+    "role": "mechanic",
+    "location": "motorpool",
+    "activity": "repairing_car",
+    "start": "busy",
+    "refusalNode": "refuse",
+    "availableWhen": { "suspicion": "<60" },
+    "nodes": {
+      "busy": {
+        "speaker": "speaker.mechanic",
+        "text": "dialogue.mechanic.busy",
+        "responses": [
+          { "id": "delivery", "text": "dialogue.response.ask_motor_deliveries", "next": "delivery", "when": { "suspicion": "<32" } },
+          { "id": "car", "text": "dialogue.response.ask_car", "next": "car" },
+          { "id": "leave", "text": "dialogue.response.leave", "next": null }
+        ]
+      },
+      "delivery": {
+        "speaker": "speaker.mechanic",
+        "text": "dialogue.mechanic.delivery",
+        "effects": [{ "suspicion": 6 }, { "addFact": "motorpool_delivery_time" }, { "unlockRoute": "motorpool_service_entry" }, { "setFlag": "knows_motorpool_entry", "value": true }],
+        "responses": [{ "id": "delivery", "text": "dialogue.response.thanks", "next": null }]
+      },
+      "car": {
+        "speaker": "speaker.mechanic",
+        "text": "dialogue.mechanic.car",
+        "effects": [{ "suspicion": -3 }],
+        "responses": [{ "id": "car", "text": "dialogue.response.leave", "next": null }]
+      },
+      "refuse": {
+        "speaker": "speaker.mechanic",
+        "text": "dialogue.mechanic.refuse",
+        "responses": [{ "id": "leave", "text": "dialogue.response.leave", "next": null }]
+      }
+    }
+  },
+  {
+    "id": "park_small_talk",
+    "npcId": "park_young_woman",
+    "prompt": "dialogue.resident.prompt",
+    "role": "resident",
+    "location": "avenue_park",
+    "activity": "walking",
+    "start": "hello",
+    "refusalNode": "refuse",
+    "availableWhen": { "suspicion": "<45" },
+    "nodes": {
+      "hello": {
+        "speaker": "speaker.resident",
+        "text": "dialogue.resident.hello",
+        "responses": [
+          { "id": "directions", "text": "dialogue.response.ask_directions", "next": "directions" },
+          { "id": "pry", "text": "dialogue.response.ask_who_works_late", "next": "pry" },
+          { "id": "leave", "text": "dialogue.response.leave", "next": null }
+        ]
+      },
+      "directions": {
+        "speaker": "speaker.resident",
+        "text": "dialogue.resident.directions",
+        "effects": [{ "suspicion": -4 }, { "addFact": "public_tram_stop" }],
+        "responses": [{ "id": "thanks", "text": "dialogue.response.thanks", "next": null }]
+      },
+      "pry": {
+        "speaker": "speaker.resident",
+        "text": "dialogue.resident.pry",
+        "effects": [{ "suspicion": 18 }, { "setFlag": "resident_uncomfortable", "value": true }],
+        "responses": [{ "id": "apologise", "text": "dialogue.response.apologise", "next": null }]
+      },
+      "refuse": {
+        "speaker": "speaker.resident",
+        "text": "dialogue.resident.refuse",
+        "responses": [{ "id": "leave", "text": "dialogue.response.leave", "next": null }]
+      }
+    }
+  }
+]

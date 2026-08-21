@@ -8,7 +8,8 @@
     "albedoAmt": 0.358,
     "grimeAmt": 0.5,
     "baseGrime": 0.34,
-    "baseGrimeH": 1.5
+    "baseGrimeH": 1.5,
+    "bumpAmt": 0.11
   },
   "render_sage": {
     "color": "#77785f",
@@ -18,7 +19,8 @@
     "albedoAmt": 0.325,
     "grimeAmt": 0.45,
     "baseGrime": 0.36,
-    "baseGrimeH": 1.4
+    "baseGrimeH": 1.4,
+    "bumpAmt": 0.09
   },
   "render_bone": {
     "color": "#b4a88e",
@@ -28,7 +30,8 @@
     "albedoAmt": 0.325,
     "grimeAmt": 0.55,
     "baseGrime": 0.32,
-    "baseGrimeH": 1.5
+    "baseGrimeH": 1.5,
+    "bumpAmt": 0.075
   },
   "brick_rust": {
     "color": "#9a7350",
@@ -38,7 +41,8 @@
     "albedoAmt": 0.455,
     "grimeAmt": 0.5,
     "baseGrime": 0.3,
-    "baseGrimeH": 1.3
+    "baseGrimeH": 1.3,
+    "bumpAmt": 0.18
   },
   "concrete_stone": {
     "color": "#a79e88",
@@ -48,7 +52,17 @@
     "albedoAmt": 0.55,
     "grimeAmt": 0.45,
     "baseGrime": 0.2,
-    "baseGrimeH": 1.1
+    "baseGrimeH": 1.1,
+    "bumpAmt": 0.13
+  },
+  "pavement": {
+    "color": "#8d8575",
+    "albedo": "textures/pavement_albedo.png",
+    "grime": "textures/pavement_grime.png",
+    "texScale": 0.22,
+    "albedoAmt": 0.68,
+    "grimeAmt": 0.3,
+    "bumpAmt": 0.16
   },
   "asphalt": {
     "color": "#46423a",
@@ -56,7 +70,10 @@
     "grime": "textures/asphalt_grime.png",
     "texScale": 0.18,
     "albedoAmt": 0.6,
-    "grimeAmt": 0.35
+    "grimeAmt": 0.35,
+    "bumpAmt": 0.13,
+    "sheen": 0.025,
+    "sheenPower": 5.0
   },
   "kerb": {
     "color": "#6b6355",
@@ -64,7 +81,8 @@
     "grime": "textures/concrete_grime.png",
     "texScale": 0.5,
     "albedoAmt": 0.6,
-    "grimeAmt": 0.35
+    "grimeAmt": 0.35,
+    "bumpAmt": 0.17
   },
   "stone_plaza": {
     "color": "#a79e88",
@@ -72,7 +90,8 @@
     "grime": "textures/asphalt_grime.png",
     "texScale": 0.55,
     "albedoAmt": 0.65,
-    "grimeAmt": 0.4
+    "grimeAmt": 0.4,
+    "bumpAmt": 0.2
   },
   "roof": {
     "color": "#544c3e",
@@ -80,7 +99,10 @@
     "grime": "textures/metal_grime.png",
     "texScale": 0.2,
     "albedoAmt": 0.7,
-    "grimeAmt": 0.5
+    "grimeAmt": 0.5,
+    "bumpAmt": 0.1,
+    "sheen": 0.045,
+    "sheenPower": 4.5
   },
   "trim": {
     "color": "#35301f",
@@ -88,7 +110,10 @@
     "grime": "textures/metal_grime.png",
     "texScale": 0.4,
     "albedoAmt": 0.5,
-    "grimeAmt": 0.3
+    "grimeAmt": 0.3,
+    "bumpAmt": 0.08,
+    "sheen": 0.075,
+    "sheenPower": 5.5
   },
   "rust_metal": {
     "color": "#9a7350",
@@ -98,7 +123,10 @@
     "albedoAmt": 0.95,
     "grimeAmt": 0.6,
     "baseGrime": 0.22,
-    "baseGrimeH": 0.9
+    "baseGrimeH": 0.9,
+    "bumpAmt": 0.2,
+    "sheen": 0.085,
+    "sheenPower": 4.0
   },
   "state_red": {
     "color": "#c0201f",
@@ -106,15 +134,74 @@
     "grime": "textures/render_grime.png",
     "texScale": 0.3,
     "albedoAmt": 0.35,
-    "grimeAmt": 0.25
+    "grimeAmt": 0.25,
+    "bumpAmt": 0.045
   },
   "bark": {
     "color": "#544c3e",
-    "albedo": "textures/metal_albedo.png",
-    "grime": "textures/metal_grime.png",
+    "albedo": "textures/bark_albedo.png",
+    "grime": "textures/bark_grime.png",
+    "texScale": 0.7,
+    "albedoAmt": 0.76,
+    "grimeAmt": 0.34,
+    "bumpAmt": 0.28
+  },
+  "foliage_olive": {
+    "color": "#3f4930",
+    "albedo": "textures/foliage_albedo.png",
+    "grime": "textures/foliage_grime.png",
+    "texScale": 0.72,
+    "albedoAmt": 0.32,
+    "grimeAmt": 0.1,
+    "bumpAmt": 0.025,
+    "windAmt": 0.045,
+    "alphaMap": "textures/foliage_cutout.png",
+    "alphaTest": 0.42,
+    "doubleSided": true
+  },
+  "foliage_dry": {
+    "color": "#655d3c",
+    "albedo": "textures/foliage_albedo.png",
+    "grime": "textures/foliage_grime.png",
     "texScale": 0.8,
+    "albedoAmt": 0.3,
+    "grimeAmt": 0.12,
+    "bumpAmt": 0.02,
+    "windAmt": 0.035,
+    "alphaMap": "textures/foliage_cutout.png",
+    "alphaTest": 0.42,
+    "doubleSided": true
+  },
+  "soil": {
+    "color": "#514739",
+    "albedo": "textures/soil_albedo.png",
+    "grime": "textures/soil_grime.png",
+    "texScale": 0.75,
     "albedoAmt": 0.7,
-    "grimeAmt": 0.3
+    "grimeAmt": 0.35,
+    "bumpAmt": 0.2
+  },
+  "fabric_bone": {
+    "color": "#a49a84",
+    "albedo": "textures/render_albedo.png",
+    "grime": "textures/render_grime.png",
+    "texScale": 0.55,
+    "albedoAmt": 0.3,
+    "grimeAmt": 0.16,
+    "bumpAmt": 0.025,
+    "windAmt": 0.022,
+    "doubleSided": true
+  },
+  "fabric_sage": {
+    "color": "#676d59",
+    "albedo": "textures/render_albedo.png",
+    "grime": "textures/render_grime.png",
+    "texScale": 0.6,
+    "albedoAmt": 0.28,
+    "grimeAmt": 0.18,
+    "bumpAmt": 0.02,
+    "windAmt": 0.018,
+    "doubleSided": true
   },
   "cobble": {
     "color": "#6b6355",
@@ -122,7 +209,8 @@
     "grime": "textures/cobble_grime.png",
     "texScale": 0.55,
     "albedoAmt": 0.75,
-    "grimeAmt": 0.4
+    "grimeAmt": 0.4,
+    "bumpAmt": 0.23
   },
   "planks": {
     "color": "#9a7350",
@@ -130,7 +218,10 @@
     "grime": "textures/planks_grime.png",
     "texScale": 0.6,
     "albedoAmt": 0.8,
-    "grimeAmt": 0.4
+    "grimeAmt": 0.4,
+    "bumpAmt": 0.17,
+    "sheen": 0.025,
+    "sheenPower": 5.0
   },
   "tile_floor": {
     "color": "#a79e88",
@@ -138,7 +229,10 @@
     "grime": "textures/tile_grime.png",
     "texScale": 0.5,
     "albedoAmt": 0.8,
-    "grimeAmt": 0.35
+    "grimeAmt": 0.35,
+    "bumpAmt": 0.12,
+    "sheen": 0.035,
+    "sheenPower": 5.0
   },
   "glass": {
     "color": "#3f4a4e",
@@ -146,7 +240,10 @@
     "grime": "textures/glass_grime.png",
     "texScale": 0.55,
     "albedoAmt": 0.85,
-    "grimeAmt": 0.2
+    "grimeAmt": 0.2,
+    "bumpAmt": 0.035,
+    "sheen": 0.18,
+    "sheenPower": 2.5
   },
   "wood_door": {
     "color": "#5a4a34",
@@ -156,7 +253,10 @@
     "albedoAmt": 0.7,
     "grimeAmt": 0.35,
     "baseGrime": 0.25,
-    "baseGrimeH": 0.8
+    "baseGrimeH": 0.8,
+    "bumpAmt": 0.15,
+    "sheen": 0.04,
+    "sheenPower": 5.0
   },
   "puddle": {
     "color": "#9b9482",
@@ -164,6 +264,33 @@
     "grime": "textures/glass_grime.png",
     "texScale": 0.35,
     "albedoAmt": 0.9,
-    "grimeAmt": 0.0
+    "grimeAmt": 0.0,
+    "bumpAmt": 0.025,
+    "sheen": 0.28,
+    "sheenPower": 2.0
+  },
+  "window_glow": {
+    "color": "#aa8455",
+    "albedo": "textures/glass_albedo.png",
+    "grime": "textures/glass_grime.png",
+    "texScale": 0.55,
+    "albedoAmt": 0.32,
+    "grimeAmt": 0.1,
+    "bumpAmt": 0.015,
+    "sheen": 0.08,
+    "sheenPower": 3.0,
+    "emissive": "#6d4a28",
+    "emissiveIntensity": 0.42
+  },
+  "light_glow": {
+    "color": "#dcc18b",
+    "albedo": "textures/glass_albedo.png",
+    "grime": "textures/glass_grime.png",
+    "texScale": 0.4,
+    "albedoAmt": 0.18,
+    "grimeAmt": 0.0,
+    "bumpAmt": 0.0,
+    "emissive": "#b78648",
+    "emissiveIntensity": 0.62
   }
 }

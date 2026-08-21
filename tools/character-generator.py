@@ -232,6 +232,38 @@ class MeshBuilder:
         self.box([(cx-hw,cy+hh,cz-hd),(cx+hw,cy+hh,cz-hd),(cx+hw,cy-hh,cz-hd),(cx-hw,cy-hh,cz-hd),
                   (cx-hw,cy+hh,cz+hd),(cx+hw,cy+hh,cz+hd),(cx+hw,cy-hh,cz+hd),(cx-hw,cy-hh,cz+hd)], bw)
 
+    def ellipsoid(self, cx, cy, cz, rx, ry, rz, bw=None, seg_u=12, seg_v=6):
+        """Low-cost UV ellipsoid for anatomy that must read as organic.
+        The poles are shared and intermediate latitude rings are stitched;
+        face details can opt out of the silhouette shell via set_shell()."""
+        top = self.add_vert((cx, cy+ry, cz), bw)
+        rings = []
+        for j in range(1, seg_v):
+            phi = math.pi*j/seg_v
+            base = len(self.verts)
+            for i in range(seg_u):
+                theta = 2*math.pi*i/seg_u
+                self.add_vert((
+                    cx + rx*math.sin(phi)*math.cos(theta),
+                    cy + ry*math.cos(phi),
+                    cz + rz*math.sin(phi)*math.sin(theta),
+                ), bw)
+            self.ring_meta[base] = (seg_u, True)
+            rings.append(base)
+        bottom = self.add_vert((cx, cy-ry, cz), bw)
+        tris = []
+        for i in range(seg_u):
+            ni = (i+1) % seg_u
+            tris.extend([top, rings[0]+i, rings[0]+ni])
+        self._emit(tris)
+        for a, bb in zip(rings, rings[1:]):
+            self.stitch(a, bb)
+        tris = []
+        for i in range(seg_u):
+            ni = (i+1) % seg_u
+            tris.extend([bottom, rings[-1]+ni, rings[-1]+i])
+        self._emit(tris)
+
     def finish(self):
         verts=np.array(self.verts,dtype=np.float32)
         all_tris=np.array([i for g in self.groups.values() for i in g],dtype=np.uint32)
@@ -428,23 +460,32 @@ def build_body(m):
         b.cap(r[-1], tuple(np.array(J[f'{s}Hand'])+np.array([0,0.012,0])),
               [(f'{s}Hand',1.0)], flip=True)
 
-        # hands: flattened mitten palm with a knuckle break, plus a thumb
+        # Hands: a shaped palm, four separate fingers and a two-section
+        # thumb. The old mitten silhouette was one of the strongest prototype
+        # tells at third-person camera distance.
         b.set_material('Skin')
         hp=np.array(J[f'{s}Hand'])
         HB=[(f'{s}Hand',1.0)]
-        p1=b.sect(hp[0],hp[1]-0.012,0.006,0.044,0.020,3.0,HB,seg=10)
-        p2=b.sect(hp[0],hp[1]-0.052,0.012,0.048,0.021,3.0,HB,seg=10)
-        p3=b.sect(hp[0],hp[1]-0.082,0.014,0.044,0.018,3.0,HB,seg=10)  # knuckles
-        p4=b.sect(hp[0],hp[1]-0.104,0.016,0.036,0.015,2.6,HB,seg=10)  # fingers
-        b.stitch(p1,p2); b.stitch(p2,p3); b.stitch(p3,p4)
-        b.cap(p4,(hp[0],hp[1]-0.118,0.016),HB)
+        p1=b.sect(hp[0],hp[1]-0.008,0.006,0.038,0.019,3.0,HB,seg=12)
+        p2=b.sect(hp[0],hp[1]-0.044,0.011,0.044,0.021,3.0,HB,seg=12)
+        p3=b.sect(hp[0],hp[1]-0.074,0.014,0.041,0.019,2.8,HB,seg=12)
+        b.stitch(p1,p2); b.stitch(p2,p3)
         b.cap(p1,(hp[0],hp[1]-0.006,0.006),HB,flip=True)
+        finger_lengths = [0.036, 0.045, 0.048, 0.040]
+        finger_x = [-0.029, -0.010, 0.010, 0.029]
+        for fx, fl in zip(finger_x, finger_lengths):
+            r0=b.sect(hp[0]+fx,hp[1]-0.073,0.014,0.0086,0.0080,2.2,HB,seg=7)
+            r1=b.sect(hp[0]+fx,hp[1]-0.073-fl*0.62,0.016,0.0081,0.0075,2.2,HB,seg=7)
+            r2=b.sect(hp[0]+fx,hp[1]-0.073-fl,0.017,0.0067,0.0064,2.0,HB,seg=7)
+            b.stitch(r0,r1); b.stitch(r1,r2)
+            b.cap(r2,(hp[0]+fx,hp[1]-0.075-fl,0.017),HB)
         b.set_shell(False)
         sx = 1 if s=='Left' else -1
-        t1=b.sect(hp[0]-sx*0.040,hp[1]-0.028,0.020,0.012,0.012,2.0,HB,seg=6)
-        t2=b.sect(hp[0]-sx*0.048,hp[1]-0.052,0.034,0.010,0.010,2.0,HB,seg=6)
-        b.stitch(t1,t2)
-        b.cap(t2,(hp[0]-sx*0.052,hp[1]-0.062,0.040),HB)
+        t1=b.sect(hp[0]-sx*0.038,hp[1]-0.026,0.018,0.013,0.012,2.0,HB,seg=7)
+        t2=b.sect(hp[0]-sx*0.050,hp[1]-0.047,0.030,0.011,0.010,2.0,HB,seg=7)
+        t3=b.sect(hp[0]-sx*0.054,hp[1]-0.064,0.039,0.0085,0.008,2.0,HB,seg=7)
+        b.stitch(t1,t2); b.stitch(t2,t3)
+        b.cap(t3,(hp[0]-sx*0.056,hp[1]-0.071,0.043),HB)
         b.set_shell(True)
 
         # legs: trousers with calf mass and an ankle break, then footwear
@@ -506,7 +547,10 @@ def build_body(m):
         (HC-0.140, 0.050, 0.052,-0.005),                   # throat
         (HC-0.165, 0.056, 0.057,-0.006),                   # into the neck loft
     ]
-    b.loft(HEAD, bw=lambda p: HW, n=2.3, seg=sH)
+    # loft() expects ascending Y. Keeping this list in anatomical top-down
+    # order is useful for editing, but it must be reversed for outward face
+    # normals; otherwise the inverted-hull outline renders across the face.
+    b.loft(list(reversed(HEAD)), bw=lambda p: HW, n=2.3, seg=sH)
     # nose: bridge wedge plus a slightly wider tip — kept in the shell, the
     # profile silhouette is half the face at this style level
     ns = fNose
@@ -525,19 +569,37 @@ def build_body(m):
            (-0.072,HC+0.020,0.084),( 0.072,HC+0.020,0.084),
            ( 0.072,HC+0.008,0.090),(-0.072,HC+0.008,0.090)], HW)
     b.set_shell(True)
-    # ears
+    # Ears: shallow organic shells rather than rectangular tabs.
     for sx in (-1,1):
-        b.box([(sx*0.086,HC+0.020,-0.012),(sx*0.098,HC+0.020,-0.012),
-               (sx*0.098,HC-0.030,-0.008),(sx*0.086,HC-0.030,-0.008),
-               (sx*0.086,HC+0.016, 0.020),(sx*0.098,HC+0.016, 0.020),
-               (sx*0.098,HC-0.028, 0.022),(sx*0.086,HC-0.028, 0.022)], HW)
+        b.ellipsoid(sx*0.094,HC-0.006,0.002,0.012,0.030,0.010,HW,seg_u=9,seg_v=5)
 
-    # -- face features. Eyes on everyone: two dark blocks at the eye line —
-    # the single cheapest "this is a person, facing that way" signal there is.
+    # -- face features. Whites, irises, brows, lips and nostrils remain cheap,
+    # but read as a human face instead of a pair of black prototype slots.
     b.set_shell(False)
-    b.set_material('Trim')
+    eye_sep = 0.033
+    b.set_material('EyeWhite')
     for sx in (-1,1):
-        b.box_at(sx*0.032, HC-0.013, 0.0935, 0.0095, 0.0055, 0.007, HW)
+        b.ellipsoid(sx*eye_sep, HC-0.012, 0.096, 0.018,0.0085,0.010,HW,seg_u=10,seg_v=5)
+    b.set_material('Iris')
+    for sx in (-1,1):
+        b.ellipsoid(sx*eye_sep, HC-0.012, 0.104, 0.0062,0.0062,0.0035,HW,seg_u=8,seg_v=4)
+        b.ellipsoid(sx*eye_sep, HC-0.012, 0.107, 0.0027,0.0034,0.002,HW,seg_u=7,seg_v=4)
+    b.set_material('Hair')
+    for sx in (-1,1):
+        b.box([(sx*0.012,HC+0.010,0.099),(sx*0.055,HC+0.013,0.096),
+               (sx*0.054,HC+0.020,0.095),(sx*0.014,HC+0.019,0.099),
+               (sx*0.012,HC+0.010,0.104),(sx*0.055,HC+0.013,0.101),
+               (sx*0.054,HC+0.020,0.100),(sx*0.014,HC+0.019,0.104)],HW)
+    b.set_material('Iris')
+    for sx in (-1,1):
+        b.ellipsoid(sx*0.009,HC-0.039,0.117*ns,0.0034,0.0025,0.0025,HW,seg_u=7,seg_v=4)
+    b.set_material('Lips')
+    mouth_w = 0.034*(0.95+0.05*fJaw)
+    b.ellipsoid(0,HC-0.066,0.091,mouth_w,0.0048,0.006,HW,seg_u=12,seg_v=4)
+    b.ellipsoid(0,HC-0.073,0.090,mouth_w*0.88,0.0042,0.0055,HW,seg_u=12,seg_v=4)
+    b.set_material('SkinDetail')
+    for sx in (-1,1):
+        b.ellipsoid(sx*0.094,HC-0.006,0.011,0.003,0.013,0.0025,HW,seg_u=7,seg_v=4)
     if m.get('moustache'):
         b.set_material('Hair')
         b.box_at(0, HC-0.052, 0.096, 0.032, 0.009, 0.014, HW)
@@ -551,12 +613,11 @@ def build_body(m):
     # stays clear; 'ring' leaves the crown bald.
     if m.get('hair') == 'full':
         b.set_material('Hair')
-        b.loft([(HC+0.132, 0.055, 0.062,-0.014),
-                (HC+0.110, 0.078, 0.088,-0.016),
-                (HC+0.072, 0.092, 0.103,-0.018),
+        b.loft([(HC+0.006, 0.091, 0.096,-0.032),
                 (HC+0.030, 0.096, 0.106,-0.022),
-                (HC-0.010, 0.094, 0.101,-0.028),
-                (HC-0.048, 0.086, 0.090,-0.034)],
+                (HC+0.072, 0.092, 0.103,-0.018),
+                (HC+0.110, 0.078, 0.088,-0.016),
+                (HC+0.132, 0.055, 0.062,-0.014)],
                bw=lambda p: HW, n=2.3, capBot=True, capTop=True, seg=sH)
     elif m.get('hair') == 'ring':
         b.set_material('Hair')
@@ -625,9 +686,14 @@ def att_flat_cap(m):
 
 def att_headscarf(m):
     b = MeshBuilder(skinned=False, material='Scarf')
-    r1=b.sect(0,0.040,0.004,0.126,0.128,2.2); r2=b.sect(0,0.150,-0.010,0.098,0.104,2.2)
-    r3=b.sect(0,0.210,-0.012,0.040,0.044,2.0)
-    b.stitch(r1,r2); b.stitch(r2,r3); b.cap(r3,(0,0.218,-0.012))
+    # Open from temple to temple: the previous closed rings formed a veil
+    # across the eyes. This hood wraps the sides and nape while a shallow
+    # crown sits behind the forehead plane.
+    r1=b.sect(0,0.030,-0.012,0.126,0.124,2.2,seg=14,arc=(150,390))
+    r2=b.sect(0,0.128,-0.020,0.110,0.112,2.2,seg=14,arc=(150,390))
+    r3=b.sect(0,0.188,-0.028,0.066,0.072,2.0,seg=14,arc=(150,390))
+    b.stitch(r1,r2); b.stitch(r2,r3)
+    b.ellipsoid(0,0.154,-0.030,0.100,0.074,0.090,seg_u=14,seg_v=6)
     b.box_at(0,-0.010,-0.085, 0.030,0.055,0.018)   # knot / tail at the nape
     return [('Head','Scarf',b.finish())]
 
@@ -871,6 +937,10 @@ def build_clips(spec):
 # Fixed part colours, all from the established palette / prototype coat set.
 FIXED_COLOURS = {
     'Skin':         '#b4a88e',   # bone — reads cream under the warm lights
+    'SkinDetail':   '#8d806c',
+    'EyeWhite':     '#d8d3c5',
+    'Iris':         '#2c2b25',
+    'Lips':         '#8a655c',
     'Shoes':        '#35301f',   # trim — shoes and boots
     'Trim':         '#35301f',
     'CapCloth':     '#746a55',
@@ -916,6 +986,9 @@ def export_glb(path, name, spec, body, attachments, clips, speeds):
         if mn == 'Body': rgb = hex_to_rgb(spec['coats'][0])
         elif mn == 'Hair': rgb = hex_to_rgb(spec['mesh'].get('hairColor') or '#35301f')
         elif mn == 'Legs': rgb = hex_to_rgb(spec['mesh'].get('legsColor') or '#46423a')
+        elif mn == 'Skin': rgb = hex_to_rgb(spec['mesh'].get('skinColor') or FIXED_COLOURS['Skin'])
+        elif mn == 'SkinDetail': rgb = hex_to_rgb(spec['mesh'].get('skinDetailColor') or FIXED_COLOURS['SkinDetail'])
+        elif mn == 'Iris': rgb = hex_to_rgb(spec['mesh'].get('eyeColor') or FIXED_COLOURS['Iris'])
         else: rgb = hex_to_rgb(FIXED_COLOURS[mn])
         MI[mn] = len(materials)
         materials.append(Material(name=mn, pbrMetallicRoughness=PbrMetallicRoughness(

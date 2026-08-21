@@ -28,14 +28,23 @@ const OUTLINE_MATERIAL = new THREE.MeshBasicMaterial({
   side: THREE.BackSide,
 });
 
-const cache = new Map<number, THREE.MeshToonMaterial>();
+const cache = new Map<string, THREE.MeshToonMaterial>();
 
-export function toonMaterial(color: THREE.ColorRepresentation): THREE.MeshToonMaterial {
+export function toonMaterial(
+  color: THREE.ColorRepresentation,
+  shadowFill = 0,
+): THREE.MeshToonMaterial {
   const hex = new THREE.Color(color).getHex();
-  let material = cache.get(hex);
+  const key = `${hex}:${shadowFill}`;
+  let material = cache.get(key);
   if (!material) {
-    material = new THREE.MeshToonMaterial({ color: hex, gradientMap: toonRamp() });
-    cache.set(hex, material);
+    material = new THREE.MeshToonMaterial({
+      color: hex,
+      gradientMap: toonRamp(),
+      emissive: shadowFill > 0 ? hex : 0x000000,
+      emissiveIntensity: shadowFill,
+    });
+    cache.set(key, material);
   }
   return material;
 }
@@ -50,7 +59,10 @@ export function toonify(root: THREE.Object3D): void {
         mesh.material = OUTLINE_MATERIAL;
         mesh.castShadow = false;
       } else {
-        mesh.material = toonMaterial(old.color ?? 0xffffff);
+        const anatomicalFill = ['Skin', 'SkinDetail', 'EyeWhite', 'Lips'].includes(old.name)
+          ? 0.18
+          : 0;
+        mesh.material = toonMaterial(old.color ?? 0xffffff, anatomicalFill);
         // bone-parented attachments (hats, canes, bags) don't cast: a cap
         // shadow across the eyes turns every face into the darkest toon
         // band and the cast stops reading
