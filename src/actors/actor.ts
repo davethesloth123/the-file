@@ -59,9 +59,15 @@ export function loadArchetype(name: string): Promise<ArchetypeAsset> {
   return pending;
 }
 
+import tuning from '../data/tuning.json';
+
+const LEAN = tuning.locomotion.turnLean;
+
 export class Actor {
   readonly group = new THREE.Group();
   readonly locomotion: Locomotion;
+  private readonly modelRoot: THREE.Object3D;
+  private lean = 0;
 
   constructor(asset: ArchetypeAsset, options: { coat?: string; height?: number } = {}) {
     const root = cloneWithSkeleton(asset.template);
@@ -75,10 +81,23 @@ export class Actor {
     // options.height is per-instance variation on top of the archetype base.
     this.group.scale.setScalar(asset.baseHeight * (options.height ?? 1));
     this.group.add(root);
+    this.modelRoot = root;
     this.locomotion = new Locomotion(new THREE.AnimationMixer(root), asset.clips, asset.naturalSpeeds);
+    // deterministic per-instance idle offset — no synchronized breathing
+    this.locomotion.desync((Actor.instances++ * 0.618) % 1);
   }
 
-  update(speed: number, dt: number): void {
+  private static instances = 0;
+
+  /** yawRate (rad/s) banks the model into turns. Applied to the model child
+   *  under the externally-set group yaw — sim state and cones never see it. */
+  update(speed: number, dt: number, yawRate = 0): void {
+    const target = THREE.MathUtils.clamp(
+      -yawRate * speed * LEAN.gain,
+      -THREE.MathUtils.degToRad(LEAN.maxDeg), THREE.MathUtils.degToRad(LEAN.maxDeg),
+    );
+    this.lean += (target - this.lean) * Math.min(1, dt * LEAN.smooth);
+    this.modelRoot.rotation.z = this.lean;
     this.locomotion.update(speed, dt);
   }
 }

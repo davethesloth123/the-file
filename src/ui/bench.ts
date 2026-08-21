@@ -13,6 +13,10 @@ const RANGES: Record<GradeUniformName, [min: number, max: number, step: number]>
   uVignette: [0, 1, 0.01],
   uGrain: [0, 0.15, 0.005],
   uRedKeep: [0, 1, 0.01],
+  uEdge: [0, 1, 0.01],
+  uEdgeDepth: [0.001, 0.08, 0.001],
+  uEdgeCrease: [0.001, 0.12, 0.001],
+  uEdgeFade: [20, 300, 5],
 };
 
 export function createBench(grade: GradePass): void {

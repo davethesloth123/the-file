@@ -1,0 +1,36 @@
+{
+  "_comment": "Every audio number lives here. footsteps.phases are the normalized gait-cycle points where heels strike (left, right) — the same phase the locomotion clips are authored around. There is NO detection stinger and there must never be one (bible §11).",
+  "master": 0.8,
+  "footsteps": {
+    "phases": [0.08, 0.58],
+    "gainWalk": 0.5,
+    "gainHurry": 0.8,
+    "gainJitter": 0.15,
+    "pitchJitterCents": 60,
+    "woodAboveY": 2.0
+  },
+  "ambience": {
+    "gain": 0.3
+  },
+  "manifest": {
+    "stoneWalk": [
+      "audio/step_stone_walk_0.wav",
+      "audio/step_stone_walk_1.wav",
+      "audio/step_stone_walk_2.wav",
+      "audio/step_stone_walk_3.wav"
+    ],
+    "stoneHurry": [
+      "audio/step_stone_hurry_0.wav",
+      "audio/step_stone_hurry_1.wav",
+      "audio/step_stone_hurry_2.wav",
+      "audio/step_stone_hurry_3.wav"
+    ],
+    "wood": [
+      "audio/step_wood_0.wav",
+      "audio/step_wood_1.wav",
+      "audio/step_wood_2.wav",
+      "audio/step_wood_3.wav"
+    ],
+    "ambience": "audio/ambience_city.wav"
+  }
+}

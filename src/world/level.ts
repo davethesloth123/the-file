@@ -68,6 +68,8 @@ interface MapData {
   restricted: { id: string; pos: [number, number]; r: number; label: string }[];
   waypoints: Record<string, [number, number]>;
   spawns: Record<string, [number, number]>;
+  poles?: [number, number][];
+  puddles?: [x: number, z: number, rx: number, rz: number][];
 }
 
 export interface LevelData {
@@ -248,7 +250,14 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
     const nChimneys = 1 + Math.floor(rand() * 2);
     for (let c = 0; c < nChimneys; c++) {
       const ch = 1.2 + rand() * 1.2;
-      put('brick_rust', 0.75, ch, 0.75, ox + (rand() - 0.5) * (w - 3), h + ch / 2, oz + (rand() - 0.5) * (d - 3));
+      const cx = ox + (rand() - 0.5) * (w - 3), cz = oz + (rand() - 0.5) * (d - 3);
+      put('brick_rust', 0.75, ch, 0.75, cx, h + ch / 2, cz);
+      // clay pots on the crown — the roofline detail every 1978 skyline has
+      const nPots = 1 + Math.floor(rand() * 2);
+      for (let p = 0; p < nPots; p++) {
+        bag.cylinder('rust_metal', 0.10, 0.13, 0.45, 6,
+          wxOf(cx + (p - 0.5) * 0.34, cz), h + ch + 0.22, wzOf(cx + (p - 0.5) * 0.34, cz));
+      }
     }
     if (rand() < 0.65) {
       const lx = ox + (rand() - 0.5) * (w - 4);
@@ -280,10 +289,20 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
         else put(mat, depth, bh, bw, ox + f.sign * (half + extraOut), y, oz + along);
       };
 
+      // pilasters on the street facade: every second bay plus the corners
+      if (isEntrance && f.len > 8) {
+        for (let i = 0; i <= nx; i += 2) {
+          const along = x0 - 1.1 + i * 2.2;
+          place(along, (h - 0.6) / 2, 0.42, h - 0.7, 0.12, b.style, 0.06);
+        }
+      }
       for (let i = 0; i < nx; i++) {
         const along = x0 + i * 2.2;
         if (i === doorSlot) {
-          place(along, 1.25, 1.5, 2.5, 0.3, 'trim');
+          place(along, 1.25, 1.5, 2.5, 0.3, 'wood_door');
+          place(along, 2.62, 1.9, 0.24, 0.2, 'concrete_stone', 0.08);
+          place(along - 0.85, 1.3, 0.22, 2.6, 0.2, 'concrete_stone', 0.08);
+          place(along + 0.85, 1.3, 0.22, 2.6, 0.2, 'concrete_stone', 0.08);
           if (b.stateLintel) place(along, 2.75, 2.2, 0.5, 0.34, 'state_red');
           place(along, 0.12, 2.4, 0.24, 1.6, 'concrete_stone');
         } else if (rand() < 0.3) {
@@ -312,8 +331,15 @@ function building(ctx: BuildCtx, b: BuildingDef): void {
           const y = GROUND_FLOOR_H + (fl - 0.5) * FLOOR_H;
           if (y > h - 1.2) continue;
           place(along, y, 1.16 * winScale, 1.66 * winScale, 0.1, 'render_bone');
-          place(along, y, 1.0 * winScale, 1.5 * winScale, 0.14, 'trim');
+          place(along, y, 1.0 * winScale, 1.5 * winScale, 0.14, 'glass');
           place(along, y - 0.78 * winScale, 1.2 * winScale, 0.08, 0.1, 'concrete_stone', 0.06);
+          // the camera reads floors 1-2 of the street facade: give those
+          // windows lintels and jambs so the ink pass has reveals to draw
+          if (isEntrance && fl <= 2) {
+            place(along, y + 0.92 * winScale, 1.46 * winScale, 0.16, 0.12, 'concrete_stone', 0.05);
+            place(along - 0.63 * winScale, y, 0.11, 1.62 * winScale, 0.12, 'concrete_stone', 0.05);
+            place(along + 0.63 * winScale, y, 0.11, 1.62 * winScale, 0.12, 'concrete_stone', 0.05);
+          }
           if (fl === balconyFloor && rand() < 0.3) {
             place(along, y - 0.85, 1.7, 0.12, 0.85, 'concrete_stone', 0.42);
             place(along, y - 0.45, 1.7, 0.7, 0.06, 'trim', 0.82);
@@ -904,10 +930,8 @@ function backdrop(bag: KitBag, walls: WallBox[], map: MapData): void {
     const style = styles[i % styles.length]!;
     bag.box(style, w, h, d, x, h / 2, z, (rand() - 0.5) * 0.2, true);
     bag.box('roof', w * 1.02, 0.4, d * 1.02, x, h + 0.2, z, (rand() - 0.5) * 0.2);
-    // sparse dark window strips read at fog distance
-    for (let r = 2.4; r < h - 1.5; r += 2.7) {
-      bag.box('trim', w * 0.8, 0.9, 0.15, x, r, z + d / 2 * (z > 0 ? -1 : 1), (rand() - 0.5) * 0.2);
-    }
+    // pure massing: at fog distance any facade detail aliases into streaks,
+    // so the backdrop city is silhouettes and rooflines only
     if (rand() < 0.4) {
       const ch = 1.4 + rand();
       bag.box('brick_rust', 0.8, ch, 0.8, x + (rand() - 0.5) * (w - 3), h + ch / 2, z + (rand() - 0.5) * (d - 3));
@@ -970,6 +994,41 @@ function furniture(ctx: BuildCtx, map: MapData): void {
       bag.cylinder('trim', 0.12, 0.16, 7, 6, x, 3.5, jz, lean);
       bag.box('trim', 0.9, 0.35, 0.5, x + lean * 7, 7.1, jz);
     }
+  }
+  // telegraph poles with sagging wires along the cross streets: two kinked
+  // segments per span read as catenary under the toon ramp
+  const poles = map.poles ?? [];
+  for (let i = 0; i < poles.length; i++) {
+    const [px, pz] = poles[i]!;
+    const rand = mulberry32(7700 + i);
+    const lean = (rand() - 0.5) * 0.04;
+    bag.cylinder('bark', 0.09, 0.12, 6.5, 6, px, 3.25, pz, lean);
+    bag.box('bark', 1.3, 0.09, 0.09, px, 6.1, pz);
+    bag.box('bark', 1.0, 0.08, 0.08, px, 5.7, pz);
+    const next = poles[i + 1];
+    if (next && Math.hypot(next[0] - px, next[1] - pz) < 26) {
+      const mx = (px + next[0]) / 2, mz = (pz + next[1]) / 2;
+      for (const wy of [6.06, 5.66]) {
+        for (const [ax, az, bx2, bz2, toMid] of [
+          [px, pz, mx, mz, 1], [mx, mz, next[0], next[1], -1],
+        ] as [number, number, number, number, number][]) {
+          const wl = Math.hypot(bx2 - ax, bz2 - az);
+          const ry = Math.atan2(bx2 - ax, bz2 - az);
+          const tilt = toMid * Math.atan2(0.35, wl);
+          bag.box('trim', 0.025, 0.025, wl + 0.15,
+            (ax + bx2) / 2, wy - 0.175, (az + bz2) / 2, ry, false, tilt);
+        }
+      }
+    }
+  }
+  // puddles: light sheets at kerb corners — wet ground under an overcast
+  // grade is a value statement, not a shader
+  for (const [ux, uz, urx, urz] of map.puddles ?? []) {
+    const disc = new THREE.CircleGeometry(1, 12);
+    disc.scale(urx, urz, 1);
+    disc.rotateX(-Math.PI / 2);
+    disc.translate(ux, 0.045, uz);
+    bag.add('puddle', disc);
   }
   const T = map.tram;
   const len = T.to - T.from;

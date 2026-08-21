@@ -15,6 +15,10 @@ interface WorldMaterialDef {
   texScale: number;
   albedoAmt: number;
   grimeAmt: number;
+  /** ground-contact darkening: strength 0-1 and fade-top height in metres.
+   *  Gated to near-vertical surfaces, so floors and pavements are immune. */
+  baseGrime?: number;
+  baseGrimeH?: number;
 }
 
 const DEFS = materialsJson as unknown as Record<string, WorldMaterialDef | string>;
@@ -75,6 +79,8 @@ export function worldMaterial(name: string): THREE.MeshToonMaterial {
     uTexScale: { value: def.texScale },
     uAlbedoAmt: { value: def.albedoAmt },
     uGrimeAmt: { value: def.grimeAmt },
+    uBaseGrime: { value: def.baseGrime ?? 0 },
+    uBaseGrimeH: { value: def.baseGrimeH ?? 1 },
   };
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -96,7 +102,7 @@ export function worldMaterial(name: string): THREE.MeshToonMaterial {
         varying vec3 vTriPos;
         varying vec3 vTriNorm;
         uniform sampler2D tAlbedo, tGrime;
-        uniform float uTexScale, uAlbedoAmt, uGrimeAmt;
+        uniform float uTexScale, uAlbedoAmt, uGrimeAmt, uBaseGrime, uBaseGrimeH;
         float triSample(sampler2D t, vec3 w) {
           vec3 an = pow(abs(normalize(vTriNorm)), vec3(4.0));
           an /= (an.x + an.y + an.z);
@@ -113,6 +119,11 @@ export function worldMaterial(name: string): THREE.MeshToonMaterial {
           float grm = triSample(tGrime, vTriPos);
           diffuseColor.rgb *= mix(1.0, alb * 2.0, uAlbedoAmt);
           diffuseColor.rgb *= mix(1.0, grm, uGrimeAmt);
+          // walls sit into the street: rising damp and boot-splash darkening
+          // over the bottom metre-and-a-half, walls only, never floors
+          float wallness = 1.0 - abs(normalize(vTriNorm).y);
+          diffuseColor.rgb *= 1.0 - uBaseGrime * wallness
+            * (1.0 - smoothstep(0.0, uBaseGrimeH, vTriPos.y));
         }`,
       );
   };
