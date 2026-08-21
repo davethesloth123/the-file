@@ -17,8 +17,13 @@ export interface Hud {
   /** Objective bottom-left, sentence case, with a distance readout. */
   setObjective(label: string | null, distance: string | null): void;
   /** Action prompt bottom-centre: keycap + label; progress 0..1 while a
-   *  hold is running; optional warning line under it. */
-  setPrompt(label: string | null, progress: number, sub: string | null): void;
+   *  hold is running; optional line under it (red). Pass key null for an
+   *  information-only prompt with no keycap. */
+  setPrompt(label: string | null, progress: number, sub: string | null, key?: string | null): void;
+  /** Roubles, top-right under confidence. */
+  setMoney(value: number): void;
+  /** Kit lines bottom-right: diversion charges, pattern intel, exfil. */
+  setKit(lines: { text: string; dim: boolean }[]): void;
   /** End card. Fires once; the button reloads the run. */
   showEnd(title: string, body: string, colour: string, button: string): void;
 }
@@ -90,7 +95,12 @@ export function createHud(): Hud {
   const confNote = document.createElement('div');
   confNote.style.cssText =
     `color:${MUTE};font:10px ${MONO};letter-spacing:0.08em;margin-top:5px;text-transform:uppercase`;
-  fileBox.append(confLabelRow, confTrack, confNote);
+  // money: earned in the street, spent at counters — gains read gold (§12)
+  const moneyRow = document.createElement('div');
+  moneyRow.style.cssText =
+    `color:#cbb37a;font:700 13px ${MONO};letter-spacing:0.08em;margin-top:12px`;
+  moneyRow.textContent = '₽ 0';
+  fileBox.append(confLabelRow, confTrack, confNote, moneyRow);
   root.appendChild(fileBox);
 
   // bottom-left: the errand, sentence case (design canvas), with distance
@@ -162,8 +172,16 @@ export function createHud(): Hud {
     `color:rgba(222,210,184,0.30)`, `font:10px ${MONO}`, 'letter-spacing:0.18em',
     'text-align:right', 'line-height:1.9',
   ].join(';');
-  keysHint.innerHTML = 'WASD MOVE · SHIFT HURRY · DRAG LOOK<br>V CAMERA · TAB BENCH';
+  keysHint.innerHTML = 'WASD MOVE · SHIFT HURRY · DRAG LOOK<br>F ACT · G DIVERSION · V CAMERA · TAB BENCH';
   root.appendChild(keysHint);
+
+  // kit lines above the controls hint: what Andrei is holding and knows
+  const kitBox = document.createElement('div');
+  kitBox.style.cssText = [
+    'position:absolute', 'bottom:68px', 'right:30px', 'text-align:right',
+    `font:10px ${MONO}`, 'letter-spacing:0.14em', 'line-height:2.0',
+  ].join(';');
+  root.appendChild(kitBox);
 
   return {
     setLocation(text: string): void {
@@ -199,18 +217,31 @@ export function createHud(): Hud {
       objLabel.textContent = label ?? '';
       objDist.textContent = distance ?? '';
     },
-    setPrompt(label: string | null, progress: number, sub: string | null): void {
+    setPrompt(label: string | null, progress: number, sub: string | null, key: string | null = 'F'): void {
       if (!label) {
         promptBox.style.display = 'none';
         return;
       }
       promptBox.style.display = 'block';
       promptLabel.textContent = label;
-      promptKey.style.display = progress > 0 ? 'none' : 'inline-block';
+      promptKey.textContent = key ?? '';
+      promptKey.style.display = key && progress <= 0 ? 'inline-block' : 'none';
       promptTrack.style.display = progress > 0 ? 'block' : 'none';
       promptFill.style.width = `${Math.round(progress * 100)}%`;
       promptSub.style.display = sub ? 'block' : 'none';
       promptSub.textContent = sub ?? '';
+    },
+    setMoney(value: number): void {
+      moneyRow.textContent = `₽ ${Math.round(value)}`;
+    },
+    setKit(lines: { text: string; dim: boolean }[]): void {
+      kitBox.innerHTML = '';
+      for (const line of lines) {
+        const el = document.createElement('div');
+        el.textContent = line.text;
+        el.style.color = line.dim ? 'rgba(222,210,184,0.22)' : 'rgba(222,210,184,0.55)';
+        kitBox.appendChild(el);
+      }
     },
     showEnd(title: string, body: string, colour: string, button: string): void {
       if (card.style.display === 'flex') return;

@@ -25,7 +25,10 @@ import { evaluateConduct, type ActiveConduct } from './systems/conduct';
 import { FileMeter } from './systems/file';
 import { ConfidenceMeter } from './systems/confidence';
 import { MissionRunner, type MissionDef } from './systems/mission';
-import { within, REACH_RADIUS } from './systems/interaction';
+import { within, REACH_RADIUS, HoldToAct } from './systems/interaction';
+import {
+  Wallet, PRICES, courierPay, clerkAvailable, stationAvailable, type Address,
+} from './systems/economy';
 import { CONE_RANGE, CONE_FOV } from './systems/observation';
 import { Radio } from './ui/radio';
 import { str } from './core/strings';
@@ -231,20 +234,21 @@ let restrictedZones: { pos: [number, number]; r: number; label: string }[] = [];
 let lastConduct: ActiveConduct | null = null;
 let lastObservers = 0;
 
-// objective marker: paper ring and post, never red (red is the state's)
-function makeMarker(): THREE.Group {
+// place markers: paper for the player's objectives, red ONLY on the
+// militia station — state authority is the one thing allowed to be red
+function makeMarker(color: number, scale = 1): THREE.Group {
   const g = new THREE.Group();
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(1.1, 1.45, 28),
+    new THREE.RingGeometry(1.1 * scale, 1.45 * scale, 28),
     new THREE.MeshBasicMaterial({
-      color: 0xded2b8, transparent: true, opacity: 0.8, side: THREE.DoubleSide,
+      color, transparent: true, opacity: 0.8, side: THREE.DoubleSide,
     }),
   );
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.05;
   const post = new THREE.Mesh(
     new THREE.CylinderGeometry(0.055, 0.055, 2.2, 6),
-    new THREE.MeshBasicMaterial({ color: 0xded2b8, transparent: true, opacity: 0.35 }),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35 }),
   );
   post.position.y = 1.1;
   g.add(ring, post);
@@ -253,6 +257,125 @@ function makeMarker(): THREE.Group {
   return g;
 }
 let objectiveMarker: THREE.Group | null = null;
+
+// ---------------------------------------------------- economy, the doors
+const wallet = new Wallet();
+let divCharges = 0;
+let boughtIntel = false;
+let veraAlive = true;
+let veraBriefed = false;
+let courierCount = 0;
+let parcel: (Address & { pay: number }) | null = null;
+let parcelMarker: THREE.Group | null = null;
+let veraActor: Actor | null = null;
+const ambientHold = new HoldToAct();
+const ambientRadio: { speaker: string; text: string; cold: boolean }[] = [];
+let spots: {
+  fence: [number, number]; clerk: [number, number];
+  station: [number, number]; vera: [number, number];
+} | null = null;
+
+type SpotName = 'fence' | 'clerk' | 'station';
+function ambientSpotAt(px: number, pz: number): SpotName | null {
+  if (!spots) return null;
+  if (within(px, pz, spots.fence[0], spots.fence[1], PRICES.fence.radius)) return 'fence';
+  if (within(px, pz, spots.clerk[0], spots.clerk[1], PRICES.clerk.radius)) return 'clerk';
+  if (within(px, pz, spots.station[0], spots.station[1], PRICES.station.radius)) return 'station';
+  return null;
+}
+
+function say(speakerKey: string, textKey: string, vars?: Record<string, string | number>, cold = false): void {
+  ambientRadio.push({ speaker: str(speakerKey), text: str(textKey, vars), cold });
+}
+
+function takeCourier(): void {
+  const a = PRICES.courier.addresses[courierCount % PRICES.courier.addresses.length]! as Address;
+  parcel = { pos: a.pos, label: a.label, pay: courierPay(courierCount) };
+  courierCount++;
+  if (mission) mission.flags['parcel'] = true;
+  if (!parcelMarker) parcelMarker = makeMarker(0xa8905e);
+  parcelMarker.position.set(a.pos[0], world.groundHeight(a.pos[0], a.pos[1], 0.3), a.pos[1]);
+  parcelMarker.visible = true;
+  say('speaker.grigori', 'grigori.courier_take', { place: a.label });
+}
+
+function deliverParcel(): void {
+  if (!parcel) return;
+  wallet.earn(parcel.pay);
+  say('speaker.you', 'you.delivered', { pay: parcel.pay });
+  if (mission) mission.flags['parcel'] = false;
+  if (parcelMarker) parcelMarker.visible = false;
+  parcel = null;
+}
+
+function payClerk(): void {
+  if (!wallet.pay(PRICES.clerk.price)) return;
+  file.transact(PRICES.clerk.fileCut);
+  say('speaker.clerk', 'clerk.paid');
+}
+
+function informAtStation(): void {
+  if (veraAlive) {
+    file.transact(PRICES.station.inform.fileCut);
+    confidence.spend(PRICES.station.inform.confidenceCost);
+    veraAlive = false;
+    if (veraActor) {
+      scene.remove(veraActor.group);
+      const i = walkers.findIndex((w) => w.actor === veraActor);
+      if (i >= 0) walkers.splice(i, 1);
+      veraActor = null;
+    }
+    for (const u of patrolUnits) u.patrol.speedFactor = 1;
+    say('speaker.handler', 'handler.informed_vera', undefined, true);
+  } else {
+    file.transact(PRICES.station.debrief.fileCut);
+    confidence.spend(PRICES.station.debrief.confidenceCost);
+    say('speaker.handler', 'handler.debrief', undefined, true);
+  }
+}
+
+function throwDiversion(): void {
+  if (divCharges <= 0 || !player) return;
+  divCharges--;
+  const tx = player.x + Math.sin(player.yaw) * PRICES.diversion.throwDistance;
+  const tz = player.z + Math.cos(player.yaw) * PRICES.diversion.throwDistance;
+  let heard = false;
+  for (const u of patrolUnits) {
+    if (Math.hypot(u.patrol.x - tx, u.patrol.z - tz) < PRICES.diversion.hearRadius) {
+      u.patrol.investigate(tx, tz, PRICES.diversion.probeSeconds);
+      heard = true;
+    }
+  }
+  say('speaker.you', heard ? 'you.diversion_hit' : 'you.diversion_miss');
+}
+
+function stepAmbient(dt: number, actHeld: boolean): void {
+  if (!player || !mission || mission.status !== 'running' || !spots) return;
+  const px = player.x, pz = player.z;
+  if (parcel && within(px, pz, parcel.pos[0], parcel.pos[1], PRICES.courier.deliverRadius)) {
+    deliverParcel();
+  }
+  if (veraAlive && !veraBriefed
+    && within(px, pz, spots.vera[0], spots.vera[1], PRICES.vera.briefRadius)) {
+    veraBriefed = true;
+    for (const u of patrolUnits) u.patrol.speedFactor = PRICES.vera.patrolSlow;
+    say('speaker.vera', 'vera.brief');
+  }
+  const spot = ambientSpotAt(px, pz);
+  if (!spot) {
+    ambientHold.t = 0;
+    return;
+  }
+  if (spot === 'fence') {
+    if (!parcel && ambientHold.step(true, actHeld, PRICES.courier.holdSeconds, dt)) takeCourier();
+  } else if (spot === 'clerk') {
+    const avail = clerkAvailable(file.value, wallet.value) === 'ok';
+    if (ambientHold.step(avail, actHeld, PRICES.clerk.holdSeconds, dt)) payClerk();
+  } else {
+    const avail = stationAvailable(file.value);
+    if (ambientHold.step(avail, actHeld, PRICES.station.holdSeconds, dt)) informAtStation();
+  }
+}
 
 const FAN_MATERIAL = new THREE.MeshBasicMaterial({
   color: 0xc0201f,
@@ -286,7 +409,43 @@ async function startPlay(): Promise<void> {
   hud = createHud();
   radio = new Radio(document.body);
   mission = new MissionRunner(ordinaryTraffic as unknown as MissionDef);
-  objectiveMarker = makeMarker();
+  objectiveMarker = makeMarker(0xded2b8);
+  // the doors stand open from hour one (bible §7.5) — fixed place markers
+  const spawnOf = (k: string): [number, number] => level.spawns[k] ?? [0, 0];
+  spots = {
+    fence: spawnOf('grigori'), clerk: spawnOf('clerk'),
+    station: spawnOf('station'), vera: spawnOf('vera'),
+  };
+  for (const [pos, color] of [
+    [spots.fence, 0xa8905e], [spots.clerk, 0x9d9784], [spots.station, 0xc0201f],
+  ] as [pos: [number, number], color: number][]) {
+    const m = makeMarker(color, 0.9);
+    m.position.set(pos[0], world.groundHeight(pos[0], pos[1], 0.3), pos[1]);
+    m.visible = true;
+  }
+  // Grigori in his alley; Vera by her window in the park
+  void (async () => {
+    const gAsset = await loadArchetype('civilian_m');
+    const grigori = new Actor(gAsset, { coat: gAsset.coats[2 % gAsset.coats.length]! });
+    grigori.group.position.set(spots!.fence[0], 0, spots!.fence[1]);
+    grigori.group.rotation.y = Math.PI * 0.75;
+    scene.add(grigori.group);
+    walkers.push({
+      actor: grigori, route: [], target: 0, speed: 0,
+      x: spots!.fence[0], z: spots!.fence[1], yaw: 0,
+      px: spots!.fence[0], pz: spots!.fence[1], pyaw: 0,
+    });
+    const vAsset = await loadArchetype('civilian_f');
+    veraActor = new Actor(vAsset, { coat: vAsset.coats[1 % vAsset.coats.length]! });
+    veraActor.group.position.set(spots!.vera[0], 0, spots!.vera[1]);
+    veraActor.group.rotation.y = Math.PI / 2;
+    scene.add(veraActor.group);
+    walkers.push({
+      actor: veraActor, route: [], target: 0, speed: 0,
+      x: spots!.vera[0], z: spots!.vera[1], yaw: 0,
+      px: spots!.vera[0], pz: spots!.vera[1], pyaw: 0,
+    });
+  })();
   restrictedZones = level.restricted.map((r) => ({ pos: r.pos, r: r.r, label: r.label }));
   void spawnPatrols(level.patrols);
   // interior NPCs: shopkeepers, the clerk, the duty officer, the mechanic
@@ -319,6 +478,15 @@ async function startPlay(): Promise<void> {
   (window as unknown as { __mission?: MissionRunner }).__mission = mission;
   (window as unknown as { __file?: FileMeter }).__file = file;
   (window as unknown as { __confidence?: ConfidenceMeter }).__confidence = confidence;
+  (window as unknown as { __econ?: unknown }).__econ = {
+    wallet,
+    get divCharges() { return divCharges; },
+    get boughtIntel() { return boughtIntel; },
+    get veraAlive() { return veraAlive; },
+    get veraBriefed() { return veraBriefed; },
+    get parcel() { return parcel; },
+    patrols: patrolUnits,
+  };
   const asset = await loadArchetype('player');
   playerActor = new Actor(asset, { coat: asset.coats[0]! });
   scene.add(playerActor.group);
@@ -333,6 +501,24 @@ addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === 'c') {
     if (freecam.enabled) freecam.disable();
     else freecam.enable();
+  }
+});
+
+// economy one-shot keys: G throws a diversion; 1/2 buy from Grigori
+addEventListener('keydown', (e) => {
+  if (!player || !mission || mission.status !== 'running') return;
+  const k = e.key.toLowerCase();
+  if (k === 'g') throwDiversion();
+  if ((k === '1' || k === '2') && spots
+    && within(player.x, player.z, spots.fence[0], spots.fence[1], PRICES.fence.radius)) {
+    if (k === '1' && wallet.pay(PRICES.diversion.price)) {
+      divCharges++;
+      say('speaker.grigori', 'grigori.diversion_bought');
+    }
+    if (k === '2' && !boughtIntel && wallet.pay(PRICES.intel.price)) {
+      boughtIntel = true;
+      say('speaker.grigori', 'grigori.intel_bought');
+    }
   }
 });
 
@@ -360,6 +546,7 @@ renderer.setAnimationLoop((nowMs: number) => {
       mission?.step(dt, player.x, player.z, keys.has('f'), {
         file: file.value, confidence: confidence.value,
       });
+      stepAmbient(dt, keys.has('f'));
       // conduct: what is Andrei doing, and can anyone see it
       stillSeconds = player.moving ? 0 : stillSeconds + dt;
       let restrictedLabel: string | null = null;
@@ -437,9 +624,10 @@ renderer.setAnimationLoop((nowMs: number) => {
     u.fan.rotation.z = -iyaw;
     // intel gates cone VISIBILITY only: at no tier does the detection cone
     // move, turn, or shrink (pillar III). Withheld, never wrong.
+    // bought intel bypasses the confidence gate (bible §5.5: permanent)
     const intel = confidence.intel();
-    u.fan.visible = intel !== 'none';
-    (u.fan.material as THREE.MeshBasicMaterial).opacity = intel === 'full'
+    u.fan.visible = boughtIntel || intel !== 'none';
+    (u.fan.material as THREE.MeshBasicMaterial).opacity = (boughtIntel || intel === 'full')
       ? tuning.cones.fullBase + p.alert * tuning.cones.fullAlert
       : tuning.cones.partialBase + p.alert * tuning.cones.partialAlert;
   }
@@ -452,8 +640,13 @@ renderer.setAnimationLoop((nowMs: number) => {
     for (const key of mission.radioQueue.splice(0)) {
       radio.show(str('speaker.handler'), str(key));
     }
+    for (const msg of ambientRadio.splice(0)) {
+      radio.show(msg.speaker, msg.text, msg.cold);
+    }
     radio.tick(frameDt);
 
+    // exactly one prompt on screen: the mission's ask first, then a door
+    let prompt: { label: string; progress: number; sub: string | null; key: string | null } | null = null;
     const meters = { file: file.value, confidence: confidence.value };
     const objective = mission.active;
     if (objective) {
@@ -470,26 +663,73 @@ renderer.setAnimationLoop((nowMs: number) => {
         objectiveMarker.position.set(ox, world.groundHeight(ox, oz, 0.3), oz);
         objectiveMarker.scale.setScalar(1 + Math.sin(nowMs / 400) * 0.08);
       }
-      // the prompt: only hold objectives ask for a key
       const holdType = objective.type === 'hold_at' || objective.type === 'talk_to';
       const near = within(player.x, player.z, ox, oz, objective.radius ?? REACH_RADIUS);
       if (holdType && near) {
         const progress = mission.holdProgress();
-        hud.setPrompt(
-          progress > 0
+        prompt = {
+          label: progress > 0
             ? `${str('prompt.servicing')}… ${Math.round(progress * 100)}%`
             : objective.prompt ?? objective.label,
           progress,
-          progress > 0 && objective.conduct ? str('prompt.servicing.sub') : null,
-        );
-      } else {
-        hud.setPrompt(null, 0, null);
+          sub: progress > 0 && objective.conduct ? str('prompt.servicing.sub') : null,
+          key: 'F',
+        };
       }
     } else {
       hud.setObjective(null, null);
-      hud.setPrompt(null, 0, null);
       if (objectiveMarker) objectiveMarker.visible = false;
     }
+
+    if (!prompt && mission.status === 'running') {
+      const spot = ambientSpotAt(player.x, player.z);
+      const progress = ambientHold.holding ? (() => {
+        const seconds = spot === 'fence' ? PRICES.courier.holdSeconds
+          : spot === 'clerk' ? PRICES.clerk.holdSeconds : PRICES.station.holdSeconds;
+        return ambientHold.progress(seconds);
+      })() : 0;
+      if (spot === 'fence') {
+        prompt = parcel
+          ? { label: str('prompt.fence.busy'), progress: 0, sub: null, key: null }
+          : { label: str('prompt.fence.take'), progress, sub: str('prompt.fence.buy'), key: 'F' };
+      } else if (spot === 'clerk') {
+        const avail = clerkAvailable(file.value, wallet.value);
+        prompt = avail === 'nothing'
+          ? { label: str('prompt.clerk.nothing'), progress: 0, sub: null, key: null }
+          : avail === 'poor'
+            ? { label: str('prompt.clerk.poor', { money: Math.round(wallet.value) }), progress: 0, sub: null, key: null }
+            : { label: str('prompt.clerk.offer'), progress, sub: null, key: 'F' };
+      } else if (spot === 'station') {
+        prompt = !stationAvailable(file.value)
+          ? { label: str('prompt.station.none'), progress: 0, sub: null, key: null }
+          : {
+            label: str(veraAlive ? 'prompt.station.vera' : 'prompt.station.debrief'),
+            progress, sub: null, key: 'F',
+          };
+      }
+    }
+    hud.setPrompt(
+      prompt?.label ?? null, prompt?.progress ?? 0, prompt?.sub ?? null,
+      prompt ? prompt.key : 'F',
+    );
+
+    hud.setMoney(wallet.value);
+    const tier = confidence.intel();
+    const patternState = boughtIntel ? str('kit.pattern.bought')
+      : tier === 'full' ? str('kit.pattern.full')
+        : tier === 'partial' ? str('kit.pattern.partial') : str('kit.pattern.none');
+    hud.setKit([
+      ...(parcel
+        ? [{ text: str('carrying.parcel', { place: parcel.label, pay: parcel.pay }), dim: false }]
+        : []),
+      { text: `${str('kit.diversion')} ×${divCharges}`, dim: divCharges === 0 },
+      { text: `${str('kit.pattern')} — ${patternState}`, dim: !boughtIntel && tier === 'none' },
+      {
+        text: `${str('kit.exfil')} — ${tier !== 'none' ? str('kit.exfil.marked') : str('kit.exfil.none')}`,
+        dim: tier === 'none',
+      },
+    ]);
+    if (parcelMarker?.visible) parcelMarker.scale.setScalar(1 + Math.sin(nowMs / 400) * 0.08);
 
     if (mission.status === 'failed') {
       hud.showEnd(
@@ -506,7 +746,8 @@ renderer.setAnimationLoop((nowMs: number) => {
       hud.showEnd(
         str('ending.clear.title'),
         `${str('ending.clear.body')}<br><br>File closed at <b>${Math.round(file.value)}</b>` +
-        ` · confidence <b>${Math.round(confidence.value)}</b><br>${verdict}`,
+        ` · confidence <b>${Math.round(confidence.value)}</b> · ₽<b>${Math.round(wallet.value)}</b>` +
+        `<br>${verdict}${veraAlive ? '' : `<br><br>${str('ending.clear.vera_gone')}`}`,
         '#ded2b8', str('ending.again'),
       );
     }

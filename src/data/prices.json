@@ -1,0 +1,39 @@
+{
+  "start": 0,
+  "courier": {
+    "payBase": 55,
+    "payStep": 10,
+    "paySteps": 4,
+    "holdSeconds": 0.45,
+    "deliverRadius": 3.0,
+    "addresses": [
+      { "pos": [22, -76], "label": "behind the sports hall" },
+      { "pos": [-24, 44], "label": "the yard on Sadovaya" },
+      { "pos": [52, 34], "label": "the garages past the depot" },
+      { "pos": [-36, -74], "label": "the boiler house" }
+    ]
+  },
+  "clerk": {
+    "price": 130,
+    "fileCut": 40,
+    "minFile": 12,
+    "holdSeconds": 1.6,
+    "radius": 3.4
+  },
+  "station": {
+    "overFile": 18,
+    "holdSeconds": 2.6,
+    "radius": 3.6,
+    "inform": { "fileCut": 45, "confidenceCost": 38 },
+    "debrief": { "fileCut": 30, "confidenceCost": 30 }
+  },
+  "vera": { "briefRadius": 4.5, "patrolSlow": 0.84 },
+  "diversion": {
+    "price": 45,
+    "throwDistance": 22,
+    "hearRadius": 34,
+    "probeSeconds": 9
+  },
+  "intel": { "price": 70 },
+  "fence": { "radius": 3.4 }
+}

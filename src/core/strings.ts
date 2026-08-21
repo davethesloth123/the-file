@@ -5,6 +5,10 @@ import en from '../data/strings.en.json';
 
 const TABLE: Record<string, string> = en;
 
-export function str(key: string): string {
-  return TABLE[key] ?? key;
+export function str(key: string, vars?: Record<string, string | number>): string {
+  let s = TABLE[key] ?? key;
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) s = s.replace(`{${k}}`, String(v));
+  }
+  return s;
 }
