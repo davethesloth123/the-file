@@ -80,7 +80,10 @@ PARENT = {
     'RightUpLeg':'Hips','RightLeg':'RightUpLeg','RightFoot':'RightLeg','RightToe_End':'RightFoot',
 }
 BONES = list(J.keys()); BIDX = {b:i for i,b in enumerate(BONES)}
+# Segment tiers: heads get the most silhouette, limbs the least. The
+# player archetype bumps one tier via mesh.detail (camera lives behind him).
 SEG = 14
+SEG_HEAD, SEG_TORSO, SEG_LIMB = 22, 18, 14
 
 SPINE = ['Hips','Spine','Spine1','Spine2','Neck','Head']
 SPINE_Y = [J[b][1] for b in SPINE]
@@ -98,18 +101,35 @@ def spine_weights(y):
 # ------------------------------------------------------------------ builder
 class MeshBuilder:
     """Accumulates vertices plus per-material triangle groups. `skinned=False`
-    builds attachment meshes with no joint data (bone-node parented)."""
+    builds attachment meshes with no joint data (bone-node parented).
+
+    Rings carry their own segment count (and open/closed state, for arcs) so
+    heads can be smoother than limbs. Triangles added while `set_shell(False)`
+    is active are excluded from the baked outline shell — face features,
+    buttons, lapels and other non-silhouette detail must not double the
+    shell's cost (the shell is a silhouette read, nothing more)."""
     def __init__(self, skinned=True, material='Body'):
         self.verts, self.joints, self.weights = [], [], []
         self.groups = {}
         self.material = material
         self.skinned = skinned
+        self.ring_meta = {}          # base index -> (seg, closed)
+        self.shell_on = True
+        self.shell_tris = []
 
     def set_material(self, name):
         self.material = name
 
+    def set_shell(self, on):
+        self.shell_on = on
+
     def _tris(self):
         return self.groups.setdefault(self.material, [])
+
+    def _emit(self, tris):
+        self._tris().extend(tris)
+        if self.shell_on:
+            self.shell_tris.extend(tris)
 
     def add_vert(self, p, bw=None):
         self.verts.append(tuple(p))
@@ -121,37 +141,53 @@ class MeshBuilder:
             self.joints.append(js); self.weights.append([w/s for w in ws])
         return len(self.verts)-1
 
-    def sect(self, cx, cy, cz, rx, rz, n=2.0, bw=None):
+    def sect(self, cx, cy, cz, rx, rz, n=2.0, bw=None, seg=None, arc=None):
         """One superelliptical cross-section. `bw` may be a weight list or a
-        per-vertex function of (x, y, z) — the greatcoat needs the latter."""
+        per-vertex function of (x, y, z) — the greatcoat needs the latter.
+        `arc=(a0_deg, a1_deg)` builds an open partial ring (seg+1 verts)."""
+        seg = seg or SEG
         base=len(self.verts)
-        for i in range(SEG):
-            a=2*math.pi*i/SEG
+        if arc is None:
+            count, closed = seg, True
+            angles = [2*math.pi*i/seg for i in range(seg)]
+        else:
+            count, closed = seg+1, False
+            a0, a1 = math.radians(arc[0]), math.radians(arc[1])
+            angles = [a0+(a1-a0)*i/seg for i in range(seg+1)]
+        for a in angles:
             ca,sa=math.cos(a),math.sin(a)
             x=cx+rx*math.copysign(abs(ca)**(2.0/n),ca)
             z=cz+rz*math.copysign(abs(sa)**(2.0/n),sa)
             w = bw((x,cy,z)) if callable(bw) else bw
             self.add_vert((x,cy,z), w if w else (spine_weights(cy) if self.skinned else None))
+        self.ring_meta[base]=(seg, closed)
         return base
 
     def stitch(self, a, b):
-        t=self._tris()
-        for i in range(SEG):
-            j=(i+1)%SEG
-            t.extend([a+i,b+i,a+j, a+j,b+i,b+j])
+        seg, closed = self.ring_meta[a]
+        assert self.ring_meta[b][0] == seg, 'stitch: ring segment mismatch'
+        tris=[]
+        span = seg if closed else seg
+        for i in range(span):
+            j=(i+1)%seg if closed else i+1
+            tris.extend([a+i,b+i,a+j, a+j,b+i,b+j])
+        self._emit(tris)
 
     def cap(self, base, c, bw=None, flip=False):
+        seg, closed = self.ring_meta[base]
+        assert closed, 'cap: cannot cap an open arc'
         w = bw(c) if callable(bw) else bw
         ci=self.add_vert(c, w if w else (spine_weights(c[1]) if self.skinned else None))
-        t=self._tris()
-        for i in range(SEG):
-            j=(i+1)%SEG
-            t.extend([ci,base+j,base+i] if flip else [ci,base+i,base+j])
+        tris=[]
+        for i in range(seg):
+            j=(i+1)%seg
+            tris.extend([ci,base+j,base+i] if flip else [ci,base+i,base+j])
+        self._emit(tris)
 
-    def loft(self, levels, bw=None, capTop=True, capBot=True, n=2.0):
+    def loft(self, levels, bw=None, capTop=True, capBot=True, n=2.0, seg=None):
         rings=[]
         for (y,rx,rz,zo) in levels:
-            rings.append(self.sect(0,y,zo,rx,rz,n,bw))
+            rings.append(self.sect(0,y,zo,rx,rz,n,bw,seg=seg))
         for a,b in zip(rings,rings[1:]): self.stitch(a,b)
         if capBot:
             y,_,_,zo = levels[0]
@@ -161,24 +197,36 @@ class MeshBuilder:
             self.cap(rings[-1],(0,y,zo), bw)
         return rings
 
-    def chain(self, pts):
-        """pts: (bone0, bone1, t, radius). Rings placed along bone segments."""
+    def chain(self, pts, seg=None):
+        """pts: (bone0, bone1, t, radius). Rings placed along bone segments.
+        A ring exactly at t=1.0 (the joint itself) weights 50/50 across the
+        joint so elbows and knees crease instead of shearing."""
         rings=[]
-        for (b0,b1,t,r) in pts:
+        for pt in pts:
+            b0,b1,t,r = pt[:4]
+            override = pt[4] if len(pt) > 4 else None
             p0,p1=np.array(J[b0]),np.array(J[b1])
             pos=p0+(p1-p0)*t
-            bw=[(b0,1.0-t*0.62),(b1,t*0.62)] if t<0.5 else [(b0,1.0-t),(b1,t)]
-            rings.append(self.sect(pos[0],pos[1],pos[2],r,r*0.92,2.0,bw))
+            if override is not None:
+                bw=override
+            elif t >= 0.999:
+                bw=[(b0,0.5),(b1,0.5)]
+            elif t<0.5:
+                bw=[(b0,1.0-t*0.62),(b1,t*0.62)]
+            else:
+                bw=[(b0,1.0-t),(b1,t)]
+            rings.append(self.sect(pos[0],pos[1],pos[2],r,r*0.92,2.0,bw,seg=seg))
         for a,b in zip(rings,rings[1:]): self.stitch(a,b)
         return rings
 
     def box(self, pts, bw=None):
         b=len(self.verts)
         for p in pts: self.add_vert(p, bw)
-        t=self._tris()
+        tris=[]
         for f in [(0,1,2),(0,2,3),(4,6,5),(4,7,6),(0,4,5),(0,5,1),
                   (3,2,6),(3,6,7),(0,3,7),(0,7,4),(1,5,6),(1,6,2)]:
-            t.extend([b+f[0],b+f[1],b+f[2]])
+            tris.extend([b+f[0],b+f[1],b+f[2]])
+        self._emit(tris)
 
     def box_at(self, cx,cy,cz, hw,hh,hd, bw=None):
         self.box([(cx-hw,cy+hh,cz-hd),(cx+hw,cy+hh,cz-hd),(cx+hw,cy-hh,cz-hd),(cx-hw,cy-hh,cz-hd),
@@ -186,7 +234,7 @@ class MeshBuilder:
 
     def finish(self):
         verts=np.array(self.verts,dtype=np.float32)
-        all_tris=np.array([i for g in self.groups.values() for i in g],dtype=np.uint16)
+        all_tris=np.array([i for g in self.groups.values() for i in g],dtype=np.uint32)
         norms=np.zeros_like(verts)
         f=all_tris.reshape(-1,3)
         fn=np.cross(verts[f[:,1]]-verts[f[:,0]], verts[f[:,2]]-verts[f[:,0]])
@@ -194,17 +242,33 @@ class MeshBuilder:
         ln=np.linalg.norm(norms,axis=1,keepdims=True); ln[ln==0]=1
         norms/=ln
         out={'position':verts,'normal':norms,
-             'groups':{k:np.array(v,dtype=np.uint16) for k,v in self.groups.items()}}
+             'groups':{k:np.array(v,dtype=np.uint16) for k,v in self.groups.items()},
+             'shell':np.array(self.shell_tris,dtype=np.uint16)}
         if self.skinned:
             out['skinIndex']=np.array(self.joints,dtype=np.uint16)
             out['skinWeight']=np.array(self.weights,dtype=np.float32)
         return out
 
 # ------------------------------------------------------------------- body
+def smoothstep(e0, e1, x):
+    t = max(0.0, min(1.0, (x-e0)/max(e1-e0, 1e-9)))
+    return t*t*(3-2*t)
+
+def seg_tiers(m):
+    """Player gets one tier more everywhere — the camera lives behind him."""
+    if m.get('detail', 1.0) > 1.15:
+        return 26, 22, 16
+    return SEG_HEAD, SEG_TORSO, SEG_LIMB
+
 def build_body(m):
     """m: mesh params from archetypes.json."""
     shoulder, waist, weight = m['shoulder'], m['waist'], m['weight']
     limb = m['limb']
+    face = m.get('face', {})
+    fJaw, fBrow = face.get('jaw',1.0), face.get('brow',1.0)
+    fNose, fCheek = face.get('nose',1.0), face.get('cheek',1.0)
+    coat = m.get('coat', {})
+    sH, sT, sL = seg_tiers(m)
     b = MeshBuilder()
 
     def tf(y):
@@ -214,6 +278,20 @@ def build_body(m):
         elif y > 1.30: f = shoulder
         else: f = waist + (shoulder-waist)*(y-1.16)/(1.30-1.16)
         return f * weight
+
+    def torso_w(p):
+        """Spine weights, blended toward Shoulder+Arm at the shoulder line so
+        the coat's shoulders follow arm swing instead of shearing off it."""
+        x, y, _ = p
+        base = spine_weights(y)
+        if 1.30 <= y <= 1.458:
+            f = smoothstep(0.105, 0.185, abs(x)) * 0.55
+            if f > 0.001:
+                side = 'Left' if x >= 0 else 'Right'
+                out = [(bn, w*(1.0-f)) for bn, w in base]
+                out += [(f'{side}Shoulder', f*0.4), (f'{side}Arm', f*0.6)]
+                return out[:4]
+        return base
 
     TORSO_BODY = [
         (0.855, 0.163, 0.122, 0.000),
@@ -232,9 +310,9 @@ def build_body(m):
         (1.545, 0.056, 0.057,-0.002),
     ]
     b.set_material('Body')
-    b.loft([(y, rx*tf(y), rz*weight, zo) for (y,rx,rz,zo) in TORSO_BODY], n=2.6)
+    b.loft([(y, rx*tf(y), rz*weight, zo) for (y,rx,rz,zo) in TORSO_BODY], bw=torso_w, n=2.6, seg=sT)
     b.set_material('Skin')
-    b.loft([(y, rx*tf(y), rz*weight, zo) for (y,rx,rz,zo) in TORSO_NECK], n=2.6, capBot=False)
+    b.loft([(y, rx*tf(y), rz*weight, zo) for (y,rx,rz,zo) in TORSO_NECK], n=2.6, capBot=False, seg=sT)
 
     # -- coat, lofted from hem to collar. Below the hip line the hem is
     # part-weighted to the near-side UpLeg so a long coat swings with the
@@ -242,7 +320,7 @@ def build_body(m):
     hem, flare = m['coatHem'], m['coatFlare']
     def coat_w(p):
         x, y, _ = p
-        if y >= 0.955: return spine_weights(y)
+        if y >= 0.955: return torso_w(p)
         t = min(1.0, (0.955-y)/max(0.955-hem, 1e-6))
         leg_frac = 0.42*(t**1.5)   # ease in; full-linear 0.5 read as a tail at jog
         side = 'LeftUpLeg' if x >= 0 else 'RightUpLeg'
@@ -258,97 +336,195 @@ def build_body(m):
     ]
     hem_rx, hem_rz = 0.222*flare, 0.172*flare
     lower=[]
-    NL = 4 if hem < 0.70 else 3
+    NL = 6 if hem < 0.70 else 4
     for i in range(NL):
-        t = i/(NL-1)          # 0 at hem, 1 at 0.96
-        y = hem + (0.960-hem)*t
+        t = (i/(NL-1))**0.8   # eased: the skirt bells instead of coning
+        y = hem + (0.960-hem)*(i/(NL-1))
         rx = hem_rx + (0.199-hem_rx)*t
         rz = hem_rz + (0.152-hem_rz)*t
         lower.append((y, rx, rz, 0.0))
     COAT = lower + top
     b.set_material('Body')
     b.loft([(y, rx*(tf(y) if y>1.0 else weight), rz*weight, zo) for (y,rx,rz,zo) in COAT],
-           bw=coat_w, capTop=False, n=2.7)
+           bw=coat_w, capTop=False, n=2.7, seg=sT)
+
+    # -- tailoring: collar, lapels, button placket, pocket flaps. None of it
+    # is silhouette, so most of it stays out of the outline shell.
+    def coat_front_z(y):
+        pts = [(hem, hem_rz), (0.960, 0.152), (1.060, 0.135), (1.170, 0.140),
+               (1.270, 0.148), (1.370, 0.137), (1.452, 0.104)]
+        for (y0,r0),(y1,r1) in zip(pts, pts[1:]):
+            if y0 <= y <= y1:
+                t=(y-y0)/max(y1-y0,1e-9); return (r0+(r1-r0)*t)*weight
+        return 0.14*weight
+
+    if coat.get('collar'):
+        colW = [('Spine2',0.7),('Neck',0.3)]
+        r0 = 0.118*weight
+        if coat['collar'] == 'stand':
+            lv = [(1.448, r0*1.14, r0*1.06), (1.508, r0*1.10, r0*1.02)]
+        else:  # fold — wider at the base, rolled in at the top
+            lv = [(1.446, r0*1.34, r0*1.24), (1.494, r0*1.12, r0*1.06)]
+        rings=[]
+        for (y,rx,rz) in lv:
+            rings.append((b.sect(0,y,-0.004,rx,rz,2.3,colW,seg=12,arc=(115,425)),
+                          b.sect(0,y,-0.004,rx-0.015,rz-0.015,2.3,colW,seg=12,arc=(115,425))))
+        b.stitch(rings[0][0], rings[1][0])      # outer face (silhouette: keep)
+        b.set_shell(False)
+        b.stitch(rings[1][1], rings[0][1])      # inner face, reversed
+        b.stitch(rings[1][0], rings[1][1])      # top rim
+        b.set_shell(True)
+
+    b.set_shell(False)
+    if coat.get('lapels'):
+        for sx in (-1, 1):
+            zf = coat_front_z(1.40)
+            b.box([(sx*0.084,1.432,zf-0.020),(sx*0.020,1.408,zf+0.006),
+                   (sx*0.020,1.300,zf+0.014),(sx*0.086,1.318,zf-0.012),
+                   (sx*0.080,1.428,zf-0.028),(sx*0.016,1.404,zf-0.002),
+                   (sx*0.016,1.296,zf+0.006),(sx*0.082,1.314,zf-0.020)],
+                  [('Spine2',1.0)])
+    nBtn = int(coat.get('buttons', 0))
+    if nBtn > 0:
+        cols = [-0.046, 0.046] if coat.get('doubleBreasted') else [0.0]
+        if not coat.get('doubleBreasted'):
+            # single-breasted: a raised placket strip under the buttons
+            b.set_material('Body')
+            b.box_at(0.011, 1.20, coat_front_z(1.20)+0.004, 0.013, 0.195, 0.006,
+                     [('Spine1',0.6),('Spine2',0.4)])
+        b.set_material('Trim')
+        for k in range(nBtn):
+            by = 1.335 - k*(0.315/max(nBtn-1,1))
+            for bx in cols:
+                b.box_at(bx, by, coat_front_z(by)+0.008, 0.011, 0.011, 0.005,
+                         [('Spine1',0.5),('Spine',0.5)])
+    # hip pocket flaps
+    b.set_material('Body')
+    for sx in (-1, 1):
+        b.box_at(sx*0.118, 0.992, coat_front_z(0.992)*0.86, 0.050, 0.016, 0.008,
+                 [('Hips',1.0)])
+    b.set_shell(True)
 
     # -- limbs
     boots = m['boots']
+    cuffs = coat.get('cuffs', False)
     for s in ('Left','Right'):
-        b.set_material('Body')   # sleeves
-        r=b.chain([(f'{s}Arm',f'{s}ForeArm',0.00,0.086*limb*shoulder),
-                   (f'{s}Arm',f'{s}ForeArm',0.18,0.068*limb),
-                   (f'{s}Arm',f'{s}ForeArm',0.55,0.058*limb),
-                   (f'{s}Arm',f'{s}ForeArm',1.00,0.053*limb),
-                   (f'{s}ForeArm',f'{s}Hand',0.22,0.055*limb),
-                   (f'{s}ForeArm',f'{s}Hand',0.62,0.044*limb),
-                   (f'{s}ForeArm',f'{s}Hand',1.00,0.036*limb)])
+        b.set_material('Body')   # sleeves: deltoid mass, creased elbow, wrist
+        sleeve=[(f'{s}Arm',f'{s}ForeArm',0.00,0.086*limb*shoulder,
+                    [(f'{s}Shoulder',0.35),(f'{s}Arm',0.65)]),
+                (f'{s}Arm',f'{s}ForeArm',0.08,0.080*limb),
+                (f'{s}Arm',f'{s}ForeArm',0.22,0.068*limb),
+                (f'{s}Arm',f'{s}ForeArm',0.60,0.058*limb),
+                (f'{s}Arm',f'{s}ForeArm',1.00,0.054*limb),
+                (f'{s}ForeArm',f'{s}Hand',0.35,0.054*limb),
+                (f'{s}ForeArm',f'{s}Hand',0.68,0.045*limb)]
+        if cuffs:
+            sleeve += [(f'{s}ForeArm',f'{s}Hand',0.82,0.050*limb),
+                       (f'{s}ForeArm',f'{s}Hand',1.00,0.048*limb)]
+        else:
+            sleeve += [(f'{s}ForeArm',f'{s}Hand',1.00,0.037*limb)]
+        r=b.chain(sleeve, seg=sL)
         b.cap(r[0], tuple(np.array(J[f'{s}Arm'])+np.array([0,0.03,0])), [(f'{s}Arm',1.0)])
-        b.set_material('Skin')   # bare hands
-        hp=np.array(J[f'{s}Hand'])
-        h1=b.sect(hp[0],hp[1]-0.02,0.004,0.046,0.026,2.4,[(f'{s}Hand',1.0)])
-        h2=b.sect(hp[0],hp[1]-0.070,0.010,0.043,0.024,2.4,[(f'{s}Hand',1.0)])
-        h3=b.sect(hp[0],hp[1]-0.100,0.012,0.028,0.018,2.2,[(f'{s}Hand',1.0)])
-        b.stitch(r[-1],h1); b.stitch(h1,h2); b.stitch(h2,h3)
-        b.cap(h3,(hp[0],hp[1]-0.112,0.012),[(f'{s}Hand',1.0)])
+        b.cap(r[-1], tuple(np.array(J[f'{s}Hand'])+np.array([0,0.012,0])),
+              [(f'{s}Hand',1.0)], flip=True)
 
-        # legs: trousers to the boundary, then shoes/boots. Militia boots
-        # start at the knee; everyone else changes at the ankle taper.
+        # hands: flattened mitten palm with a knuckle break, plus a thumb
+        b.set_material('Skin')
+        hp=np.array(J[f'{s}Hand'])
+        HB=[(f'{s}Hand',1.0)]
+        p1=b.sect(hp[0],hp[1]-0.012,0.006,0.044,0.020,3.0,HB,seg=10)
+        p2=b.sect(hp[0],hp[1]-0.052,0.012,0.048,0.021,3.0,HB,seg=10)
+        p3=b.sect(hp[0],hp[1]-0.082,0.014,0.044,0.018,3.0,HB,seg=10)  # knuckles
+        p4=b.sect(hp[0],hp[1]-0.104,0.016,0.036,0.015,2.6,HB,seg=10)  # fingers
+        b.stitch(p1,p2); b.stitch(p2,p3); b.stitch(p3,p4)
+        b.cap(p4,(hp[0],hp[1]-0.118,0.016),HB)
+        b.cap(p1,(hp[0],hp[1]-0.006,0.006),HB,flip=True)
+        b.set_shell(False)
+        sx = 1 if s=='Left' else -1
+        t1=b.sect(hp[0]-sx*0.040,hp[1]-0.028,0.020,0.012,0.012,2.0,HB,seg=6)
+        t2=b.sect(hp[0]-sx*0.048,hp[1]-0.052,0.034,0.010,0.010,2.0,HB,seg=6)
+        b.stitch(t1,t2)
+        b.cap(t2,(hp[0]-sx*0.052,hp[1]-0.062,0.040),HB)
+        b.set_shell(True)
+
+        # legs: trousers with calf mass and an ankle break, then footwear
         b.set_material('Legs')
         thigh=[(f'{s}UpLeg',f'{s}Leg',0.00,0.108*limb),
                (f'{s}UpLeg',f'{s}Leg',0.28,0.098*limb),
                (f'{s}UpLeg',f'{s}Leg',0.70,0.080*limb),
-               (f'{s}UpLeg',f'{s}Leg',1.00,0.069*limb)]
+               (f'{s}UpLeg',f'{s}Leg',1.00,0.070*limb)]
         if not boots:
-            thigh += [(f'{s}Leg',f'{s}Foot',0.18,0.076*limb),
-                      (f'{s}Leg',f'{s}Foot',0.55,0.061*limb)]
-        lr=b.chain(thigh)
+            thigh += [(f'{s}Leg',f'{s}Foot',0.30,0.079*limb),
+                      (f'{s}Leg',f'{s}Foot',0.62,0.062*limb),
+                      (f'{s}Leg',f'{s}Foot',0.88,0.056*limb)]
+        lr=b.chain(thigh, seg=sL)
         b.cap(lr[0], tuple(np.array(J[f'{s}UpLeg'])+np.array([0,0.05,0])), [(f'{s}UpLeg',1.0)])
         b.set_material('Shoes')
         if boots:
-            low=b.chain([(f'{s}UpLeg',f'{s}Leg',1.00,0.072*limb),
-                         (f'{s}Leg',f'{s}Foot',0.18,0.078),
-                         (f'{s}Leg',f'{s}Foot',0.55,0.066),
-                         (f'{s}Leg',f'{s}Foot',1.00,0.058)])
+            # knee-high shaft: fold-over top, curved calf, ankle
+            low=b.chain([(f'{s}UpLeg',f'{s}Leg',1.00,0.078*limb),
+                         (f'{s}UpLeg',f'{s}Leg',1.00,0.070*limb),
+                         (f'{s}Leg',f'{s}Foot',0.16,0.078),
+                         (f'{s}Leg',f'{s}Foot',0.42,0.072),
+                         (f'{s}Leg',f'{s}Foot',0.70,0.062),
+                         (f'{s}Leg',f'{s}Foot',1.00,0.058)], seg=sL)
         else:
-            low=b.chain([(f'{s}Leg',f'{s}Foot',0.55,0.062*limb),
-                         (f'{s}Leg',f'{s}Foot',1.00,0.044*limb)])
+            low=b.chain([(f'{s}Leg',f'{s}Foot',0.88,0.050*limb),
+                         (f'{s}Leg',f'{s}Foot',1.00,0.044*limb)], seg=sL)
         fp=np.array(J[f'{s}Foot'])
         k = 1.10 if boots else 1.0
-        s1=b.sect(fp[0],fp[1]-0.012,0.010,0.049*k,0.052*k,2.6,[(f'{s}Foot',1.0)])
-        s2=b.sect(fp[0],fp[1]-0.048,0.045,0.052*k,0.088*k,3.0,[(f'{s}Foot',1.0)])
-        s3=b.sect(fp[0],fp[1]-0.058,0.105,0.046*k,0.058*k,3.0,[(f'{s}Foot',1.0)])
+        FB=[(f'{s}Foot',1.0)]
+        s1=b.sect(fp[0],fp[1]-0.012,0.010,0.049*k,0.052*k,2.6,FB,seg=sL)
+        s2=b.sect(fp[0],fp[1]-0.048,0.045,0.052*k,0.088*k,3.0,FB,seg=sL)
+        s3=b.sect(fp[0],fp[1]-0.058,0.105,0.046*k,0.058*k,3.0,FB,seg=sL)
         b.stitch(low[-1],s1); b.stitch(s1,s2); b.stitch(s2,s3)
-        b.cap(s3,(fp[0],fp[1]-0.060,0.140),[(f'{s}Foot',1.0)])
-        b.cap(s2,(fp[0],fp[1]-0.062,0.045),[(f'{s}Foot',1.0)],flip=True)
+        b.cap(s3,(fp[0],fp[1]-0.060,0.140),FB)
+        b.cap(s2,(fp[0],fp[1]-0.062,0.045),FB,flip=True)
+        # heel block — 12 triangles that change the whole standing profile
+        b.box_at(fp[0],fp[1]-0.052,-0.028, 0.042*k,0.022,0.032, FB)
 
-    # -- head (skin; identity above the collar comes from hair and hats)
+    # -- head: a proper skull — long front-to-back, temple width, cheekbone
+    # step, distinct jaw corner, forward chin. Per-archetype face multipliers
+    # (jaw/brow/nose/cheek) come from archetypes.json.
     HC = J['Head'][1] + 0.082
     HW = [('Head',1.0)]
     b.set_material('Skin')
     HEAD = [
-        (HC+0.118, 0.040, 0.046,-0.004),
-        (HC+0.100, 0.070, 0.079,-0.006),
-        (HC+0.070, 0.086, 0.094,-0.006),
-        (HC+0.038, 0.092, 0.100,-0.004),   # temple
-        (HC+0.012, 0.091, 0.101, 0.000),   # brow
-        (HC-0.012, 0.086, 0.099, 0.002),   # eye line
-        (HC-0.040, 0.079, 0.093, 0.004),   # cheek
-        (HC-0.066, 0.067, 0.084, 0.006),   # jaw
-        (HC-0.090, 0.048, 0.068, 0.010),   # chin
-        (HC-0.108, 0.026, 0.040, 0.006),
-        (HC-0.135, 0.048, 0.050,-0.006),   # under-jaw into neck
-        (HC-0.165, 0.055, 0.056,-0.006),
+        (HC+0.122, 0.040, 0.048,-0.008),
+        (HC+0.104, 0.072, 0.084,-0.010),                   # skull top
+        (HC+0.076, 0.088, 0.100,-0.013),                   # occiput — long skull
+        (HC+0.042, 0.093*fBrow, 0.104,-0.009),             # temple
+        (HC+0.014, 0.092*fBrow, 0.103,-0.002),             # brow
+        (HC-0.012, 0.086, 0.096, 0.002),                   # eye line, pinched
+        (HC-0.030, 0.079+0.008*fCheek, 0.095, 0.004),      # cheekbone
+        (HC-0.048, 0.074*fCheek, 0.089, 0.005),            # cheek hollow
+        (HC-0.062, 0.068*fJaw, 0.081, 0.006),              # jaw corner
+        (HC-0.078, 0.056*fJaw, 0.071, 0.009),              # jawline
+        (HC-0.094, 0.039*fJaw, 0.052, 0.014),              # chin
+        (HC-0.106, 0.024, 0.036, 0.010),                   # chin tip
+        (HC-0.120, 0.038, 0.046,-0.002),                   # under-jaw
+        (HC-0.140, 0.050, 0.052,-0.005),                   # throat
+        (HC-0.165, 0.056, 0.057,-0.006),                   # into the neck loft
     ]
-    b.loft(HEAD, bw=lambda p: HW, n=2.3)
-    # nose
-    b.box([(-0.017,HC+0.010,0.086),( 0.017,HC+0.010,0.086),
-           ( 0.017,HC-0.038,0.090),(-0.017,HC-0.038,0.090),
-           (-0.009,HC+0.004,0.108),( 0.009,HC+0.004,0.108),
-           ( 0.011,HC-0.036,0.122),(-0.011,HC-0.036,0.122)], HW)
+    b.loft(HEAD, bw=lambda p: HW, n=2.3, seg=sH)
+    # nose: bridge wedge plus a slightly wider tip — kept in the shell, the
+    # profile silhouette is half the face at this style level
+    ns = fNose
+    b.box([(-0.014,HC+0.012,0.088),( 0.014,HC+0.012,0.088),
+           ( 0.012,HC-0.020,0.094),(-0.012,HC-0.020,0.094),
+           (-0.008,HC+0.008,0.100),( 0.008,HC+0.008,0.100),
+           ( 0.008,HC-0.018,0.106*ns),(-0.008,HC-0.018,0.106*ns)], HW)
+    b.box([(-0.013,HC-0.018,0.092),( 0.013,HC-0.018,0.092),
+           ( 0.015,HC-0.040,0.092),(-0.015,HC-0.040,0.092),
+           (-0.009,HC-0.020,0.112*ns),( 0.009,HC-0.020,0.112*ns),
+           ( 0.011,HC-0.038,0.120*ns),(-0.011,HC-0.038,0.120*ns)], HW)
+    b.set_shell(False)
     # brow ridge — a shallow shelf reads as a face under toon shading
     b.box([(-0.078,HC+0.026,0.070),( 0.078,HC+0.026,0.070),
            ( 0.078,HC+0.014,0.078),(-0.078,HC+0.014,0.078),
            (-0.072,HC+0.020,0.084),( 0.072,HC+0.020,0.084),
            ( 0.072,HC+0.008,0.090),(-0.072,HC+0.008,0.090)], HW)
+    b.set_shell(True)
     # ears
     for sx in (-1,1):
         b.box([(sx*0.086,HC+0.020,-0.012),(sx*0.098,HC+0.020,-0.012),
@@ -358,12 +534,14 @@ def build_body(m):
 
     # -- face features. Eyes on everyone: two dark blocks at the eye line —
     # the single cheapest "this is a person, facing that way" signal there is.
+    b.set_shell(False)
     b.set_material('Trim')
     for sx in (-1,1):
-        b.box_at(sx*0.032, HC-0.013, 0.0955, 0.0095, 0.0055, 0.007, HW)
+        b.box_at(sx*0.032, HC-0.013, 0.0935, 0.0095, 0.0055, 0.007, HW)
     if m.get('moustache'):
         b.set_material('Hair')
         b.box_at(0, HC-0.052, 0.096, 0.032, 0.009, 0.014, HW)
+    b.set_shell(True)
     if m.get('beard'):
         b.set_material('Hair')
         b.box_at(0, HC-0.104, 0.048, 0.048, 0.042, 0.046, HW)
@@ -373,19 +551,19 @@ def build_body(m):
     # stays clear; 'ring' leaves the crown bald.
     if m.get('hair') == 'full':
         b.set_material('Hair')
-        b.loft([(HC+0.130, 0.055, 0.060,-0.010),
-                (HC+0.108, 0.078, 0.086,-0.012),
-                (HC+0.070, 0.092, 0.100,-0.014),
-                (HC+0.030, 0.096, 0.104,-0.018),
-                (HC-0.010, 0.094, 0.100,-0.026),
+        b.loft([(HC+0.132, 0.055, 0.062,-0.014),
+                (HC+0.110, 0.078, 0.088,-0.016),
+                (HC+0.072, 0.092, 0.103,-0.018),
+                (HC+0.030, 0.096, 0.106,-0.022),
+                (HC-0.010, 0.094, 0.101,-0.028),
                 (HC-0.048, 0.086, 0.090,-0.034)],
-               bw=lambda p: HW, n=2.3, capBot=True, capTop=True)
+               bw=lambda p: HW, n=2.3, capBot=True, capTop=True, seg=sH)
     elif m.get('hair') == 'ring':
         b.set_material('Hair')
         b.loft([(HC-0.058, 0.088, 0.092,-0.024),
                 (HC-0.012, 0.096, 0.102,-0.016),
                 (HC+0.022, 0.094, 0.100,-0.012)],
-               bw=lambda p: HW, n=2.3, capBot=False, capTop=False)
+               bw=lambda p: HW, n=2.3, capBot=False, capTop=False, seg=sH)
 
     return b.finish()
 
@@ -393,16 +571,24 @@ def build_body(m):
 # Small rigid meshes parented to a bone node; each part carries its own
 # material. Positions are bone-local. Returns [(bone, material, geom), ...].
 def att_peaked_cap(m):
-    # High Soviet crown: tall, slightly wider at the top than the band.
+    # High Soviet crown with the saucer overhang, red band, curved visor.
     crown = MeshBuilder(skinned=False)
-    r1=crown.sect(0,0.158,0,0.118,0.118,2.0); r2=crown.sect(0,0.215,0.010,0.124,0.120,2.0)
-    r3=crown.sect(0,0.248,0.014,0.112,0.106,2.0)
-    crown.stitch(r1,r2); crown.stitch(r2,r3); crown.cap(r3,(0,0.250,0.014))
+    r1=crown.sect(0,0.158,0,0.118,0.118,2.0,seg=16)
+    r2=crown.sect(0,0.215,0.012,0.126,0.121,2.0,seg=16)
+    r3=crown.sect(0,0.250,0.020,0.116,0.108,2.0,seg=16)
+    crown.stitch(r1,r2); crown.stitch(r2,r3); crown.cap(r3,(0,0.252,0.020))
     band = MeshBuilder(skinned=False)
-    b1=band.sect(0,0.134,0,0.1215,0.1215,2.0); b2=band.sect(0,0.158,0,0.1190,0.1190,2.0)
+    b1=band.sect(0,0.134,0,0.1215,0.1215,2.0,seg=16)
+    b2=band.sect(0,0.158,0,0.1190,0.1190,2.0,seg=16)
     band.stitch(b1,b2)
+    # curved lacquered visor: two concentric arcs, dropped at the outer lip
     brim = MeshBuilder(skinned=False)
-    brim.box_at(0,0.144,0.120, 0.1125,0.011,0.058)
+    vi=brim.sect(0,0.142,0.004,0.116,0.116,2.0,seg=10,arc=(24,156))
+    vo=brim.sect(0,0.120,0.004,0.176,0.176,2.0,seg=10,arc=(24,156))
+    brim.stitch(vi,vo)          # top face
+    vi2=brim.sect(0,0.136,0.004,0.116,0.116,2.0,seg=10,arc=(24,156))
+    vo2=brim.sect(0,0.114,0.004,0.176,0.176,2.0,seg=10,arc=(24,156))
+    brim.stitch(vo2,vi2)        # underside, reversed winding
     return [('Head','MilitiaCloth',crown.finish()),
             ('Head','State',band.finish()),
             ('Head','Trim',brim.finish())]
@@ -424,10 +610,17 @@ def att_muffler(m):
     return [('Neck','Muffler',b.finish())]
 
 def att_flat_cap(m):
+    # kepka: crown fallen forward onto a short curved brim
     b = MeshBuilder(skinned=False, material='CapCloth')
-    r1=b.sect(0,0.174,0.008,0.118,0.120,2.2); r2=b.sect(0,0.206,0.002,0.086,0.090,2.2)
-    b.stitch(r1,r2); b.cap(r2,(0,0.206,0.002)); b.cap(r1,(0,0.174,0.008),flip=True)
-    b.box_at(0,0.176,0.112, 0.075,0.009,0.030)
+    r1=b.sect(0,0.172,0.006,0.120,0.122,2.2,seg=16)
+    r2=b.sect(0,0.204,0.030,0.096,0.098,2.2,seg=16)
+    b.stitch(r1,r2); b.cap(r2,(0,0.208,0.034)); b.cap(r1,(0,0.172,0.006),flip=True)
+    vi=b.sect(0,0.170,0.006,0.112,0.112,2.0,seg=8,arc=(38,142))
+    vo=b.sect(0,0.158,0.006,0.156,0.156,2.0,seg=8,arc=(38,142))
+    b.stitch(vi,vo)
+    vi2=b.sect(0,0.165,0.006,0.112,0.112,2.0,seg=8,arc=(38,142))
+    vo2=b.sect(0,0.153,0.006,0.156,0.156,2.0,seg=8,arc=(38,142))
+    b.stitch(vo2,vi2)
     return [('Head','CapCloth',b.finish())]
 
 def att_headscarf(m):
@@ -488,74 +681,146 @@ def qmul(a,b):
             round(aw*bz+ax*by-ay*bx+az*bw,5),round(aw*bw-ax*bx-ay*by-az*bz,5)]
 HIP_Y=J['Hips'][1]
 
-def gait(n,dur,swing,kneeMax,armSwing,elbow,lean,bob,roll):
+def bump(p, center, width, amp):
+    """Raised-cosine window on cycle phase, wrap-aware. Zero outside width."""
+    d = math.atan2(math.sin(p-center), math.cos(p-center))
+    if abs(d) > width: return 0.0
+    return amp * 0.5 * (1.0 + math.cos(math.pi*d/width))
+
+def gait(P):
+    """One walking/jogging cycle from a params dict (defaults merged from
+    archetypes.json _gaitDefaults). Left heel strike is at p = pi/2 — the
+    phase where the left hip is most forward. Sign conventions (CLAUDE.md,
+    limb bones point -Y): hip forward = NEGATIVE X; knee flexion = POSITIVE
+    X; elbow flexion = NEGATIVE X. The foot bone runs toward +Z, so toe-off
+    plantarflexion = POSITIVE X and heel-strike dorsiflexion = NEGATIVE X."""
+    n, dur = P['n'], P['dur']
+    swing, kneeMax = P['swing'], P['knee']
+    armSwing, elbowBase = P['arm'], P['elbow']
+    lean, bob, roll = P['lean'], P['bob'], P['roll']
+    elbowSwing  = P.get('elbowSwing', 9)
+    armZ        = P.get('armZ', 7)
+    sway        = P.get('sway', 0.014)
+    pelvisYaw   = P.get('pelvisYaw', 5)
+    shoulderYaw = P.get('shoulderYaw', 9)
+    headStab    = P.get('headStab', 1.0)
+    lift        = P.get('lift', 0)
+    foot        = P.get('foot', {})
+    fHeel   = foot.get('heel', 10)
+    fToe    = foot.get('toe', 18)
+    fClear  = foot.get('clear', 6)
+    fFlat   = foot.get('flatten', 0.5)
+    PI = math.pi
     times=[round(i*dur/n,4) for i in range(n+1)]
-    K=[2*math.pi*i/n for i in range(n+1)]
+    K=[2*PI*i/n for i in range(n+1)]
     tr={}
     hipL=[-swing*math.sin(p) for p in K]
-    hipR=[-swing*math.sin(p+math.pi) for p in K]
-    knL =[ 5 + kneeMax*max(0,math.sin(p-1.25*math.pi)) for p in K]
-    knR =[ 5 + kneeMax*max(0,math.sin(p+math.pi-1.25*math.pi)) for p in K]
-    ftL =[-0.42*hipL[i]-0.55*knL[i] for i in range(n+1)]
-    ftR =[-0.42*hipR[i]-0.55*knR[i] for i in range(n+1)]
+    hipR=[-swing*math.sin(p+PI) for p in K]
+    knL =[ 5 + kneeMax*max(0,math.sin(p-1.25*PI)) + lift*max(0,math.sin(p-0.9*PI)) for p in K]
+    knR =[ 5 + kneeMax*max(0,math.sin(p+PI-1.25*PI)) + lift*max(0,math.sin(p+PI-0.9*PI)) for p in K]
+    # foot rocker: flatten against the ground through stance, dorsiflex into
+    # the heel strike, plantarflex at toe-off, lift toes through the swing
+    def foot_curve(p, hip, knee):
+        return (-(hip*0.42 + knee*0.55) * fFlat/0.55
+                + bump(p, 0.50*PI, 0.85, -fHeel)
+                + bump(p, 1.42*PI, 0.95,  fToe)
+                + bump(p, 1.85*PI, 0.70, -fClear))
+    ftL=[foot_curve(K[i], hipL[i], knL[i]) for i in range(n+1)]
+    ftR=[foot_curve(K[i]+PI, hipR[i], knR[i]) for i in range(n+1)]  # bump() wraps
     tr['LeftUpLeg']=[q((1,0,0),v) for v in hipL]
     tr['RightUpLeg']=[q((1,0,0),v) for v in hipR]
     tr['LeftLeg']=[q((1,0,0),v) for v in knL]
     tr['RightLeg']=[q((1,0,0),v) for v in knR]
     tr['LeftFoot']=[q((1,0,0),v) for v in ftL]
     tr['RightFoot']=[q((1,0,0),v) for v in ftR]
-    tr['LeftArm']=[qmul(q((0,0,1), 7),q((1,0,0), armSwing*math.sin(p))) for p in K]
-    tr['RightArm']=[qmul(q((0,0,1),-7),q((1,0,0),-armSwing*math.sin(p))) for p in K]
-    tr['LeftForeArm']=[q((1,0,0),-elbow-9*math.sin(p)) for p in K]
-    tr['RightForeArm']=[q((1,0,0),-elbow+9*math.sin(p)) for p in K]
-    tr['Spine']=[qmul(q((1,0,0),-lean*0.45),q((0,1,0), 4*math.sin(p))) for p in K]
+    # arms: swing opposite the same-side leg; the forearm flexes MORE as the
+    # arm swings forward (a straight pumping arm reads robotic)
+    tr['LeftArm']=[qmul(q((0,0,1), armZ),q((1,0,0), armSwing*math.sin(p))) for p in K]
+    tr['RightArm']=[qmul(q((0,0,1),-armZ),q((1,0,0),-armSwing*math.sin(p))) for p in K]
+    tr['LeftForeArm']=[q((1,0,0),-(elbowBase+elbowSwing*max(0,-math.sin(p)))) for p in K]
+    tr['RightForeArm']=[q((1,0,0),-(elbowBase+elbowSwing*max(0, math.sin(p)))) for p in K]
+    # counter-rotation: pelvis one way, shoulders the other, neck unwinds
+    # what remains so the head stays on target (headStab 1 = fully steady)
+    headYaw = (-0.6*pelvisYaw + shoulderYaw) * headStab
+    tr['Spine']=[qmul(q((1,0,0),-lean*0.45),q((0,1,0), pelvisYaw*0.4*math.sin(p))) for p in K]
     tr['Spine1']=[q((1,0,0),-lean*0.30) for p in K]
-    tr['Spine2']=[qmul(q((1,0,0),-lean*0.25),q((0,1,0),-9*math.sin(p))) for p in K]
-    tr['Neck']=[qmul(q((1,0,0),lean*0.75),q((0,1,0),4*math.sin(p))) for p in K]
-    hipsT=[[0.0,round(HIP_Y-bob+bob*abs(math.cos(p)),4),0.0] for p in K]
-    hipsR=[qmul(q((0,0,1),roll*math.sin(p)),q((0,1,0),-5*math.sin(p))) for p in K]
+    tr['Spine2']=[qmul(q((1,0,0),-lean*0.25),q((0,1,0), shoulderYaw*math.sin(p))) for p in K]
+    tr['Neck']=[qmul(q((1,0,0),lean*0.75),q((0,1,0),-headYaw*math.sin(p))) for p in K]
+    hipsT=[[round(sway*math.sin(p),4),round(HIP_Y-bob+bob*abs(math.cos(p)),4),0.0] for p in K]
+    hipsR=[qmul(q((0,0,1),roll*math.sin(p)),q((0,1,0),-pelvisYaw*math.sin(p))) for p in K]
     return {'duration':times[-1],'times':times,'quat':tr,'hipsPos':hipsT,'hipsQuat':hipsR}
 
-def idle(n=20,dur=4.4):
+def idle(P=None, n=64, dur=8.0):
+    """Two breath cycles, one weight shift out and back, one glance. The
+    militia variant clasps hands behind the back and scans instead."""
+    P = P or {}
+    breath  = P.get('breath', 1.1)
+    shZ     = P.get('shoulderZ', 1.3)
+    shiftX  = P.get('shiftX', 0.020)
+    glance  = P.get('glanceDeg', 14)
+    behind  = P.get('armsBehind', False)
+    PI = math.pi
     times=[round(i*dur/n,4) for i in range(n+1)]
-    K=[2*math.pi*i/n for i in range(n+1)]
+    K=[2*PI*i/n for i in range(n+1)]
+    # weight shift: eased swap to the mirrored stance at mid-loop, back at wrap
+    def sh(k):
+        return smoothstep(0.9*PI, 1.1*PI, k) - smoothstep(1.9*PI, 2.0*PI, k)
+    def mixv(a, b, t): return a + (b-a)*t
     tr={}
-    tr['Spine']=[q((1,0,0),-1.2+1.0*math.sin(k)) for k in K]
+    tr['Spine']=[q((1,0,0),-1.2+breath*math.sin(2*k)) for k in K]
     tr['Spine2']=[q((0,1,0),1.6*math.sin(k*0.5)) for k in K]
-    tr['Neck']=[q((0,1,0),3.2*math.sin(k*0.5)) for k in K]
-    tr['LeftArm']=[qmul(q((0,0,1), 9),q((1,0,0),1.3*math.sin(k))) for k in K]
-    tr['RightArm']=[qmul(q((0,0,1),-9),q((1,0,0),-1.3*math.sin(k))) for k in K]
-    tr['LeftForeArm']=[q((1,0,0),-12) for _ in K]
-    tr['RightForeArm']=[q((1,0,0),-12) for _ in K]
-    tr['LeftUpLeg']=[q((1,0,0),-2) for _ in K]
-    tr['RightUpLeg']=[q((1,0,0), 3) for _ in K]
-    tr['LeftLeg']=[q((1,0,0),4) for _ in K]     # soft knees, correct direction
-    tr['RightLeg']=[q((1,0,0),7) for _ in K]
-    tr['LeftFoot']=[q((1,0,0),-2) for _ in K]
-    tr['RightFoot']=[q((1,0,0),-4) for _ in K]
-    hipsT=[[0.0,round(HIP_Y-0.006+0.004*math.sin(k),4),0.0] for k in K]
-    hipsR=[q((0,0,1),1.4) for _ in K]
+    if behind:
+        tr['Neck']=[q((0,1,0),8*math.sin(k)) for k in K]            # slow scan
+        tr['LeftArm']=[qmul(q((0,0,1), 12),q((1,0,0), 16)) for _ in K]
+        tr['RightArm']=[qmul(q((0,0,1),-12),q((1,0,0), 16)) for _ in K]
+        tr['LeftForeArm']=[q((1,0,0),-38) for _ in K]
+        tr['RightForeArm']=[q((1,0,0),-38) for _ in K]
+    else:
+        tr['Neck']=[qmul(q((0,1,0),3.2*math.sin(k*0.5)),
+                         q((0,1,0),bump(k,0.5*PI,0.28*PI,glance))) for k in K]
+        tr['LeftArm']=[qmul(q((0,0,1), 9+shZ*math.sin(2*k)),q((1,0,0),1.3*math.sin(k))) for k in K]
+        tr['RightArm']=[qmul(q((0,0,1),-9-shZ*math.sin(2*k)),q((1,0,0),-1.3*math.sin(k))) for k in K]
+        tr['LeftForeArm']=[q((1,0,0),-12) for _ in K]
+        tr['RightForeArm']=[q((1,0,0),-12) for _ in K]
+    tr['LeftShoulder']=[q((0,0,1), shZ*0.6*math.sin(2*k)) for k in K]
+    tr['RightShoulder']=[q((0,0,1),-shZ*0.6*math.sin(2*k)) for k in K]
+    tr['LeftUpLeg']=[q((1,0,0),mixv(-2, 3,sh(k))) for k in K]
+    tr['RightUpLeg']=[q((1,0,0),mixv( 3,-2,sh(k))) for k in K]
+    tr['LeftLeg']=[q((1,0,0),mixv(4,7,sh(k))) for k in K]     # soft knees
+    tr['RightLeg']=[q((1,0,0),mixv(7,4,sh(k))) for k in K]
+    tr['LeftFoot']=[q((1,0,0),mixv(-2,-4,sh(k))) for k in K]
+    tr['RightFoot']=[q((1,0,0),mixv(-4,-2,sh(k))) for k in K]
+    hipsT=[[round(mixv(-shiftX,shiftX,sh(k)),4),
+            round(HIP_Y-0.006+0.004*math.sin(2*k),4),0.0] for k in K]
+    hipsR=[q((0,0,1),mixv(1.4,-1.4,sh(k))) for k in K]
     return {'duration':times[-1],'times':times,'quat':tr,'hipsPos':hipsT,'hipsQuat':hipsR}
 
-def crouch(n=12,dur=3.2):
+def crouch(n=32,dur=4.0):
+    """Crouched WORK, not a crouched statue: the right hand works at the
+    task in uneven pulls, and mid-loop Andrei checks the street over his
+    shoulder while his hands keep moving. This clip is the picture of the
+    game's core verb (servicing a drop)."""
+    PI = math.pi
     times=[round(i*dur/n,4) for i in range(n+1)]
-    K=[2*math.pi*i/n for i in range(n+1)]
+    K=[2*PI*i/n for i in range(n+1)]
     tr={}
     tr['LeftUpLeg']=[q((1,0,0),-86) for _ in K]
     tr['RightUpLeg']=[q((1,0,0),-80) for _ in K]
     tr['LeftLeg']=[q((1,0,0),108) for _ in K]
     tr['RightLeg']=[q((1,0,0),102) for _ in K]
-    tr['LeftFoot']=[q((1,0,0),-26) for _ in K]
-    tr['RightFoot']=[q((1,0,0),-24) for _ in K]
-    tr['Spine']=[q((1,0,0),-22-1.5*math.sin(k)) for k in K]
+    tr['LeftFoot']=[q((1,0,0),-26+2*math.sin(3*k)) for k in K]
+    tr['RightFoot']=[q((1,0,0),-24-2*math.sin(3*k)) for k in K]
+    tr['Spine']=[q((1,0,0),-22-1.5*math.sin(2*k)) for k in K]
     tr['Spine1']=[q((1,0,0),-13) for _ in K]
-    tr['Spine2']=[q((1,0,0),-10) for _ in K]
-    tr['Neck']=[q((1,0,0),22) for _ in K]
-    tr['RightArm']=[qmul(q((0,0,1),-14),q((1,0,0),-38-4*math.sin(k))) for k in K]
-    tr['RightForeArm']=[q((1,0,0),-46) for _ in K]
+    # the over-the-shoulder check: neck leads, upper spine follows at 0.3
+    tr['Spine2']=[qmul(q((1,0,0),-10),q((0,1,0),bump(k,1.3*PI,0.35*PI,7))) for k in K]
+    tr['Neck']=[qmul(q((1,0,0),22),q((0,1,0),bump(k,1.3*PI,0.35*PI,24))) for k in K]
+    # working hand: two uneven pulls per loop
+    tr['RightArm']=[qmul(q((0,0,1),-14),q((1,0,0),-38-5*math.sin(2*k)-3*math.sin(3*k))) for k in K]
+    tr['RightForeArm']=[q((1,0,0),-46-12*math.sin(2*k)-6*math.sin(3*k+0.7)) for k in K]
     tr['LeftArm']=[qmul(q((0,0,1),13),q((1,0,0),-10)) for _ in K]
-    tr['LeftForeArm']=[q((1,0,0),-30) for _ in K]
-    hipsT=[[0.0,round(0.470+0.006*math.sin(k),4),0.0] for k in K]
+    tr['LeftForeArm']=[q((1,0,0),-30-3*math.sin(2*k)) for k in K]
+    hipsT=[[0.0,round(0.470+0.006*math.sin(2*k),4),round(0.008*math.sin(3*k),4)] for k in K]
     hipsR=[q((1,0,0),-7) for _ in K]
     return {'duration':times[-1],'times':times,'quat':tr,'hipsPos':hipsT,'hipsQuat':hipsR}
 
@@ -581,20 +846,25 @@ K_STRIDE = BASE_WALK_SPEED * BASE_DUR / math.sin(math.radians(BASE_SWING))
 def walk_speed(swing, dur):
     return round(K_STRIDE * math.sin(math.radians(swing)) / dur, 3)
 
-JOG = {'n':20,'dur':0.64,'swing':45,'knee':72,'arm':38,'elbow':32,'lean':9.0,'bob':0.042,'roll':4.5}
-JOG_SPEED = 4.05   # bible-authored; jog params are unchanged from the bible clip
+JOG_SPEED = 4.05   # bible-authored speed for the default jog clip
 
 def build_clips(spec):
-    w = spec['gait']['walk']
+    GD = ARCHETYPES.get('_gaitDefaults', {})
+    walkP = {**GD.get('walk', {}), **spec['gait']['walk']}
+    jogP  = {**GD.get('jog', {}),  **spec['gait'].get('jog', {})}
+    idleP = {**GD.get('idle', {}), **spec['gait'].get('idle', {})}
     stoop = spec['mesh']['stoopDeg']
     clips = {
-        'idle':   idle(),
-        'walk':   gait(w['n'],w['dur'],w['swing'],w['knee'],w['arm'],w['elbow'],w['lean'],w['bob'],w['roll']),
-        'jog':    gait(JOG['n'],JOG['dur'],JOG['swing'],JOG['knee'],JOG['arm'],JOG['elbow'],JOG['lean'],JOG['bob'],JOG['roll']),
+        'idle':   idle(idleP),
+        'walk':   gait(walkP),
+        'jog':    gait(jogP),
         'crouch': crouch(),
     }
     for c in clips.values(): apply_stoop(c, stoop)
-    speeds = {'idle':0.0,'walk':walk_speed(w['swing'],w['dur']),'jog':JOG_SPEED,'crouch':0.0}
+    # walk speed is derived from stride geometry; the default jog keeps the
+    # bible-authored 4.05, an overridden jog re-derives from its own stride
+    jog_speed = JOG_SPEED if not spec['gait'].get('jog') else walk_speed(jogP['swing'], jogP['dur'])
+    speeds = {'idle':0.0,'walk':walk_speed(walkP['swing'],walkP['dur']),'jog':jog_speed,'crouch':0.0}
     return clips, speeds
 
 # ------------------------------------------------------------------ export
@@ -662,12 +932,12 @@ def export_glb(path, name, spec, body, attachments, clips, speeds):
             prims.append(Primitive(attributes=Attributes(POSITION=a_pos, NORMAL=a_nrm,
                                                          JOINTS_0=a_jnt, WEIGHTS_0=a_wgt),
                                    indices=a_idx, mode=4, material=MI[mat]))
-        # Baked outline shell: same skin, positions pushed along normals,
-        # one primitive over every body triangle.
+        # Baked outline shell: same skin, positions pushed along normals.
+        # Only silhouette-forming triangles are included (g['shell']) — face
+        # features, buttons, lapels etc. would double the cost for nothing.
         shell_pos = g['position'] + g['normal']*OUTLINE_THICKNESS
         a_shell = push(shell_pos, np.float32, FLOAT, 'VEC3', ARRAY_BUF, minmax=True)
-        all_idx = np.concatenate([idx for idx in g['groups'].values()])
-        a_all = push(all_idx, np.uint16, U16, 'SCALAR', ELEM_BUF)
+        a_all = push(g['shell'], np.uint16, U16, 'SCALAR', ELEM_BUF)
         prims.append(Primitive(attributes=Attributes(POSITION=a_shell, NORMAL=a_nrm,
                                                      JOINTS_0=a_jnt, WEIGHTS_0=a_wgt),
                                indices=a_all, mode=4, material=MI['Outline']))
@@ -746,11 +1016,16 @@ def export_glb(path, name, spec, body, attachments, clips, speeds):
 
 # -------------------------------------------------------------------- main
 def verify_knees(clips, name):
-    """Positive X quaternion component = knee flexes backward. Non-negotiable."""
+    """Sign assertions on every clip. Knees flex backward (positive X),
+    forearms flex up (negative X), always — an inverted sine is just a
+    phase shift on hips, but knees and elbows give it away instantly."""
     for cname, c in clips.items():
         for bone in ('LeftLeg','RightLeg'):
             for qq in c['quat'][bone]:
                 assert qq[0] > 0, f'{name}/{cname}/{bone}: knee flexion sign inverted'
+        for bone in ('LeftForeArm','RightForeArm'):
+            for qq in c.get('quat', {}).get(bone, []):
+                assert qq[0] < 0, f'{name}/{cname}/{bone}: elbow flexion sign inverted'
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)

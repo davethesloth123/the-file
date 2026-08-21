@@ -149,6 +149,30 @@ def main():
     save('tile_albedo.png', a)
     save('tile_grime.png', streaks(92, 0.28, beta=2.6))
 
+    # -- window glass: a broad diagonal glint band plus a soft sky smear and
+    # faint mullion crosses. World-space triplanar sampling means every pane
+    # lands on a different part of the tile, so windows catch different
+    # light — a static reflection fake that is tone, never imagery.
+    gx, gy = np.meshgrid(np.arange(N), np.arange(N))
+    diag = ((gx + gy) / (2*N))
+    glint = 0.38 + 0.36*np.clip(np.sin(diag*np.pi*2.0 + 0.6), 0, 1)**2
+    smear = 0.14*np.exp(-((gy/N - 0.30)**2)/0.018)
+    a = glint + smear + (fbm(101, 2.8)-0.5)*0.06
+    mull = ((gx % (N//2) < 3) | (gy % (N//2) < 3)).astype(float)
+    a -= mull*0.18
+    save('glass_albedo.png', a)
+    save('glass_grime.png', np.clip(1.0 - streaks(103, 0.18, beta=2.4)*0.4, 0, 1))
+
+    # -- panelled door wood: vertical boards, joints, grain streaks
+    a = albedo_base(111, 0.08, beta=2.0)
+    board_w = N//4
+    joints = ((gx % board_w) < 3).astype(float)
+    a -= joints*0.16
+    per_board = np.take((np.linspace(-0.05, 0.05, 4)), (gx // board_w) % 4)
+    grain = (fbm(112, 1.6, aniso=6.0)-0.5)*0.10
+    a += per_board + grain
+    save('door_albedo.png', a)
+
     total = sum(os.path.getsize(os.path.join(OUT, f))
                 for f in os.listdir(OUT) if f.endswith('.png'))
     print(f'total {total//1024}KB')

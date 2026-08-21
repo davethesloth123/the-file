@@ -20,7 +20,20 @@
       "height": 1.0,
       "moustache": false,
       "beard": false,
-      "legsColor": "#46423a"
+      "legsColor": "#46423a",
+      "detail": 1.3,
+      "face": {
+        "jaw": 1.0,
+        "brow": 1.0,
+        "nose": 1.0,
+        "cheek": 1.0
+      },
+      "coat": {
+        "collar": "fold",
+        "lapels": true,
+        "buttons": 4,
+        "cuffs": false
+      }
     },
     "gait": {
       "walk": {
@@ -61,7 +74,20 @@
       "height": 1.05,
       "moustache": false,
       "beard": false,
-      "legsColor": "#46423a"
+      "legsColor": "#46423a",
+      "face": {
+        "jaw": 1.08,
+        "brow": 1.1,
+        "nose": 1.0,
+        "cheek": 1.0
+      },
+      "coat": {
+        "collar": "stand",
+        "lapels": false,
+        "buttons": 5,
+        "doubleBreasted": true,
+        "cuffs": true
+      }
     },
     "gait": {
       "walk": {
@@ -73,7 +99,25 @@
         "elbow": 8,
         "lean": 0.5,
         "bob": 0.018,
-        "roll": 2.0
+        "roll": 2.0,
+        "foot": {
+          "heel": 14,
+          "toe": 26,
+          "clear": 6,
+          "flatten": 0.5
+        },
+        "sway": 0.008,
+        "pelvisYaw": 3,
+        "shoulderYaw": 4,
+        "elbowSwing": 6,
+        "armZ": 9
+      },
+      "idle": {
+        "armsBehind": true
+      },
+      "jog": {
+        "swing": 44,
+        "dur": 0.66
       }
     }
   },
@@ -102,7 +146,18 @@
       "height": 1.0,
       "moustache": true,
       "beard": false,
-      "legsColor": "#46423a"
+      "legsColor": "#46423a",
+      "face": {
+        "jaw": 1.0,
+        "brow": 1.0,
+        "nose": 1.15,
+        "cheek": 0.95
+      },
+      "coat": {
+        "collar": "fold",
+        "lapels": true,
+        "buttons": 4
+      }
     },
     "gait": {
       "walk": {
@@ -143,7 +198,18 @@
       "height": 0.93,
       "moustache": false,
       "beard": false,
-      "legsColor": "#8a7d66"
+      "legsColor": "#8a7d66",
+      "face": {
+        "jaw": 0.92,
+        "brow": 0.96,
+        "nose": 0.95,
+        "cheek": 1.05
+      },
+      "coat": {
+        "collar": "fold",
+        "lapels": false,
+        "buttons": 3
+      }
     },
     "gait": {
       "walk": {
@@ -155,7 +221,8 @@
         "elbow": 16,
         "lean": 2.0,
         "bob": 0.032,
-        "roll": 4.0
+        "roll": 4.0,
+        "sway": 0.018
       }
     }
   },
@@ -182,7 +249,18 @@
       "height": 0.9,
       "moustache": false,
       "beard": true,
-      "legsColor": "#35301f"
+      "legsColor": "#35301f",
+      "face": {
+        "jaw": 0.95,
+        "brow": 1.0,
+        "nose": 1.1,
+        "cheek": 0.9
+      },
+      "coat": {
+        "collar": "fold",
+        "lapels": false,
+        "buttons": 4
+      }
     },
     "gait": {
       "walk": {
@@ -194,8 +272,64 @@
         "elbow": 20,
         "lean": 6.0,
         "bob": 0.018,
-        "roll": 2.5
+        "roll": 2.5,
+        "foot": {
+          "heel": 5,
+          "toe": 9,
+          "clear": 4,
+          "flatten": 0.9
+        },
+        "sway": 0.026,
+        "headStab": 0.6,
+        "elbowSwing": 4
       }
+    }
+  },
+  "_gaitDefaults": {
+    "_comment": "Merged under each archetype's own gait params by the generator. walk extras: foot rocker (heel strike / toe-off / swing clearance, deg), lateral sway (m), pelvis/shoulder counter-rotation (deg), headStab 1=steady head. jog: bent pumping arms (elbow=base flexion), knee lift, forward lean.",
+    "walk": {
+      "elbowSwing": 9,
+      "armZ": 7,
+      "sway": 0.014,
+      "pelvisYaw": 5,
+      "shoulderYaw": 9,
+      "headStab": 1.0,
+      "foot": {
+        "heel": 10,
+        "toe": 18,
+        "clear": 6,
+        "flatten": 0.5
+      }
+    },
+    "jog": {
+      "n": 20,
+      "dur": 0.64,
+      "swing": 45,
+      "knee": 72,
+      "arm": 34,
+      "elbow": 80,
+      "lean": 12.0,
+      "bob": 0.042,
+      "roll": 4.5,
+      "elbowSwing": 20,
+      "armZ": 4,
+      "sway": 0.01,
+      "pelvisYaw": 6,
+      "shoulderYaw": 11,
+      "headStab": 1.0,
+      "lift": 22,
+      "foot": {
+        "heel": 8,
+        "toe": 30,
+        "clear": 10,
+        "flatten": 0.5
+      }
+    },
+    "idle": {
+      "breath": 1.1,
+      "shoulderZ": 1.3,
+      "shiftX": 0.02,
+      "glanceDeg": 14
     }
   }
 }

@@ -12,9 +12,27 @@
     "jogFovBoost": 7,
     "minDist": 1.4,
     "views": [
-      { "dist": 4.7, "shoulder": 0.7, "focus": 1.5, "pitch": 0.15, "fov": 55 },
-      { "dist": 6.6, "shoulder": 0.0, "focus": 1.62, "pitch": 0.22, "fov": 56 },
-      { "dist": 9.8, "shoulder": 0.0, "focus": 1.75, "pitch": 0.36, "fov": 52 }
+      {
+        "dist": 4.7,
+        "shoulder": 0.55,
+        "focus": 1.5,
+        "pitch": 0.19,
+        "fov": 55
+      },
+      {
+        "dist": 6.6,
+        "shoulder": 0.0,
+        "focus": 1.62,
+        "pitch": 0.22,
+        "fov": 56
+      },
+      {
+        "dist": 9.8,
+        "shoulder": 0.0,
+        "focus": 1.75,
+        "pitch": 0.36,
+        "fov": 52
+      }
     ]
   },
   "vision": {
@@ -27,11 +45,26 @@
   "file": {
     "max": 100,
     "tiers": [
-      { "at": 0, "label": "No adverse traces" },
-      { "at": 11, "label": "One sighting logged" },
-      { "at": 35, "label": "Multiple sightings logged" },
-      { "at": 63, "label": "Referred for surveillance" },
-      { "at": 87, "label": "Detention order pending" }
+      {
+        "at": 0,
+        "label": "No adverse traces"
+      },
+      {
+        "at": 11,
+        "label": "One sighting logged"
+      },
+      {
+        "at": 35,
+        "label": "Multiple sightings logged"
+      },
+      {
+        "at": 63,
+        "label": "Referred for surveillance"
+      },
+      {
+        "at": 87,
+        "label": "Detention order pending"
+      }
     ]
   },
   "confidence": {
@@ -40,9 +73,18 @@
     "cleanDelay": 5.0,
     "cleanRate": 1.2,
     "tiers": [
-      { "at": 0, "intel": "none" },
-      { "at": 33, "intel": "partial" },
-      { "at": 66, "intel": "full" }
+      {
+        "at": 0,
+        "intel": "none"
+      },
+      {
+        "at": 33,
+        "intel": "partial"
+      },
+      {
+        "at": 66,
+        "intel": "full"
+      }
     ]
   },
   "interaction": {
@@ -64,10 +106,48 @@
     "waypointRadius": 0.7
   },
   "locomotion": {
+    "blend": {
+      "walk_jog": 0.15,
+      "jog_walk": 0.18,
+      "idle_walk": 0.2,
+      "walk_idle": 0.3,
+      "idle_jog": 0.18,
+      "jog_idle": 0.32
+    },
+    "turnLean": {
+      "gain": 0.02,
+      "maxDeg": 7,
+      "smooth": 8
+    },
     "blendTime": 0.22,
-    "timeScaleClamp": [0.6, 1.75],
+    "timeScaleClamp": [
+      0.6,
+      1.75
+    ],
     "idleBelow": 0.2,
     "jogAbove": 3.5
+  },
+  "playtest": {
+    "_comment": "Time from level start until the player first walks through a patrol cone without changing speed. Under three minutes = the design works.",
+    "leadSeconds": 1.0
+  },
+  "atmosphere": {
+    "_comment": "October afternoon, Moscow. Sun low in the south-west; damp air. Degrees; +Z is north.",
+    "skyColor": "#b3a992",
+    "fogColor": "#b3a992",
+    "fogNear": 42,
+    "fogFar": 165,
+    "sunAzimuthDeg": 225,
+    "sunElevationDeg": 21,
+    "sunColor": "#ffdfae",
+    "sunIntensity": 1.3,
+    "hemiSky": "#c4baa2",
+    "hemiGround": "#453c2c",
+    "hemiIntensity": 0.66,
+    "shadowMapSize": 2048,
+    "shadowExtent": 115,
+    "shadowNormalBias": 0.25,
+    "shadowFar": 300
   },
   "grade": {
     "uSat": 0.26,
@@ -77,6 +157,10 @@
     "uLift": 0.52,
     "uVignette": 0.58,
     "uGrain": 0.055,
-    "uRedKeep": 0.45
+    "uRedKeep": 0.45,
+    "uEdge": 0.85,
+    "uEdgeDepth": 0.02,
+    "uEdgeCrease": 0.03,
+    "uEdgeFade": 75
   }
 }

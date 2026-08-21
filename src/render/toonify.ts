@@ -51,7 +51,11 @@ export function toonify(root: THREE.Object3D): void {
         mesh.castShadow = false;
       } else {
         mesh.material = toonMaterial(old.color ?? 0xffffff);
-        mesh.castShadow = true;
+        // bone-parented attachments (hats, canes, bags) don't cast: a cap
+        // shadow across the eyes turns every face into the darkest toon
+        // band and the cast stops reading
+        mesh.castShadow = !(o.parent?.name ?? '').startsWith('att_')
+          && !o.name.startsWith('att_');
       }
     }
   });

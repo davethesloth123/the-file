@@ -32,6 +32,8 @@ import {
 import { CONE_RANGE, CONE_FOV } from './systems/observation';
 import { Radio } from './ui/radio';
 import { str } from './core/strings';
+import { AudioBus } from './core/audio';
+import audioJson from './data/audio.json';
 import tuning from './data/tuning.json';
 import ordinaryTraffic from './data/missions/ordinary_traffic.json';
 
@@ -43,11 +45,14 @@ const CAM_PIN = QUERY.get('cam');
 const renderer = createRenderer();
 document.body.appendChild(renderer.domElement);
 
+const ATM = tuning.atmosphere;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xb3a992);
-scene.fog = new THREE.Fog(0xb3a992, 52, 180);
+scene.background = new THREE.Color(ATM.skyColor);
+scene.fog = new THREE.Fog(ATM.fogColor, ATM.fogNear, ATM.fogFar);
 
-const camera = new THREE.PerspectiveCamera(56, 1, 0.1, 400);
+// near 0.25 keeps depth precision for the ink pass; the camera pull-in
+// floor is 0.4 so nothing legal ever crosses the near plane
+const camera = new THREE.PerspectiveCamera(56, 1, 0.25, 400);
 if (LINEUP) {
   camera.position.set(0, 1.5, 6.2);
   camera.lookAt(0, 1.0, 0);
@@ -59,18 +64,24 @@ if (CAM_PIN) {
 }
 
 const LEGACY_LIGHT_SCALE = Math.PI;
-const sun = new THREE.DirectionalLight(0xffeec4, 1.2 * LEGACY_LIGHT_SCALE);
-sun.position.set(60, 90, 40);
+const sun = new THREE.DirectionalLight(ATM.sunColor, ATM.sunIntensity * LEGACY_LIGHT_SCALE);
+{
+  // sun direction from azimuth/elevation; +Z is north, azimuth clockwise from it
+  const az = THREE.MathUtils.degToRad(ATM.sunAzimuthDeg);
+  const el = THREE.MathUtils.degToRad(ATM.sunElevationDeg);
+  const R = 150;
+  sun.position.set(R * Math.cos(el) * Math.sin(az), R * Math.sin(el), R * Math.cos(el) * Math.cos(az));
+}
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -115;
-sun.shadow.camera.right = 115;
-sun.shadow.camera.top = 115;
-sun.shadow.camera.bottom = -115;
-sun.shadow.camera.far = 300;
-sun.shadow.normalBias = 0.25;
+sun.shadow.mapSize.set(ATM.shadowMapSize, ATM.shadowMapSize);
+sun.shadow.camera.left = -ATM.shadowExtent;
+sun.shadow.camera.right = ATM.shadowExtent;
+sun.shadow.camera.top = ATM.shadowExtent;
+sun.shadow.camera.bottom = -ATM.shadowExtent;
+sun.shadow.camera.far = ATM.shadowFar;
+sun.shadow.normalBias = ATM.shadowNormalBias;
 scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xc4baa2, 0x453c2c, 0.6 * LEGACY_LIGHT_SCALE));
+scene.add(new THREE.HemisphereLight(ATM.hemiSky, ATM.hemiGround, ATM.hemiIntensity * LEGACY_LIGHT_SCALE));
 
 const grade = new GradePass();
 createBench(grade);
@@ -377,6 +388,40 @@ function stepAmbient(dt: number, actHeld: boolean): void {
   }
 }
 
+const audio = new AudioBus();
+
+// -------------------------------------------------- playtest instrument
+// Time from level start until the player FIRST walks through a patrol
+// cone without changing speed (BUILD-PROMPTS session 7). A crossing is a
+// maximal run of observed ticks; it qualifies when the player was calmly
+// walking (moving, not hurrying, no conduct) throughout it AND for
+// leadSeconds before it. Under three minutes = the design works.
+let metricSimTime = 0;
+let metricCalmFor = 0;
+let metricWindow = false;
+let metricWindowCalm = false;
+let metricDone = false;
+
+function metricTick(dt: number, observed: boolean, calm: boolean): void {
+  metricSimTime += dt;
+  metricCalmFor = calm ? metricCalmFor + dt : 0;
+  if (observed) {
+    if (!metricWindow) {
+      metricWindow = true;
+      metricWindowCalm = metricCalmFor >= tuning.playtest.leadSeconds;
+    }
+    metricWindowCalm &&= calm;
+  } else if (metricWindow) {
+    metricWindow = false;
+    if (metricWindowCalm && !metricDone) {
+      metricDone = true;
+      const t = metricSimTime.toFixed(1);
+      console.log(`[playtest] first calm cone crossing at ${t}s`);
+      try { localStorage.setItem('thefile.firstCalmCross', t); } catch { /* private mode */ }
+    }
+  }
+}
+
 const FAN_MATERIAL = new THREE.MeshBasicMaterial({
   color: 0xc0201f,
   transparent: true,
@@ -574,6 +619,8 @@ renderer.setAnimationLoop((nowMs: number) => {
       }
       file.accrue(conduct, observers, mission?.multiplier() ?? 1, dt);
       confidence.tick(conduct !== null && observers > 0, dt);
+      metricTick(dt, observers > 0,
+        player.moving && !player.hurrying && conduct === null);
       lastConduct = conduct;
       lastObservers = observers;
     }
@@ -599,7 +646,13 @@ renderer.setAnimationLoop((nowMs: number) => {
     playerActor.group.position.set(ix, iy, iz);
     playerActor.group.rotation.y = player.pyaw + dyaw * alpha;
     playerActor.locomotion.forced = mission?.activeConductId() ? 'crouch' : null;
-    playerActor.update(player.moving ? player.speed : 0, frameDt);
+    // dyaw is the per-fixed-step yaw delta; the sim runs at 60Hz
+    playerActor.update(player.moving ? player.speed : 0, frameDt, dyaw * 60);
+    audio.step(
+      playerActor.locomotion.phase(),
+      player.hurrying,
+      player.y > audioJson.footsteps.woodAboveY,
+    );
 
     if (!freecam.enabled && !CAM_PIN && !LINEUP) {
       trailing.update(frameDt, {
@@ -619,7 +672,7 @@ renderer.setAnimationLoop((nowMs: number) => {
     const iyaw = p.pyaw + dyaw * alpha;
     u.actor.group.position.set(ix, world.groundHeight(ix, iz, 0.3), iz);
     u.actor.group.rotation.y = iyaw;
-    u.actor.update(p.currentSpeed, frameDt);
+    u.actor.update(p.currentSpeed, frameDt, dyaw * 60);
     u.fan.position.set(ix, world.groundHeight(ix, iz, 0.3) + 0.08, iz);
     u.fan.rotation.z = -iyaw;
     // intel gates cone VISIBILITY only: at no tier does the detection cone
